@@ -57,6 +57,10 @@ jobs:
         run: make test-ext075
 
       - name: Shipped configs
+        # a check asks nothing from the network: with downloads on, a map
+        # the repository does not keep is a note, not a missing file
+        env:
+          SP_MAP_DOWNLOAD: "1"
         run: make config-check
 
       - name: Protocol 1.0 handshake and error paths
@@ -89,4 +93,8 @@ jobs:
         run: make test-proto10
 
       - name: Shipped configs
+        # a check asks nothing from the network: with downloads on, a map
+        # the repository does not keep is a note, not a missing file
+        env:
+          SP_MAP_DOWNLOAD: "1"
         run: make config-check
