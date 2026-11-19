@@ -1,0 +1,8 @@
+I (Sean Barrett) have placed all of the source code in this
+directory into the public domain. I abjur any and all legal
+rights to the source code. Should I have any rights, I assign
+a free, perpetual license for anyone to do anything at all
+with this code.
+
+I appreciate receiving credit (as "nothings" or my full name),
+but you have no legal obligation or need to do so.

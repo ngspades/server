@@ -1,0 +1,12 @@
+[map]
+modes = ["creative"]
+author = "ngspades"
+fog_color = [128, 200, 255]
+map_size = [512, 512, 64]
+capture_limit = 10
+
+# the creative mode's flat plain (tools/make_flat_map.py): everyone starts
+# in the middle
+[spawnpoints]
+team1 = { start = [224, 224, 39], end = [288, 288, 39] }
+team2 = { start = [224, 224, 39], end = [288, 288, 39] }

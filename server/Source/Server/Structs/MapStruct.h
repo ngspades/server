@@ -1,0 +1,42 @@
+#ifndef MAPSTRUCT_H
+#define MAPSTRUCT_H
+
+#include <Util/Queue.h>
+#include <Util/Types.h>
+#include <uthash/uthash.h>
+#include <Server/MapStore.h>
+#include <stddef.h>
+
+typedef enum map_rotation_mode
+{
+    MAP_ROTATION_RANDOM = 0,
+    MAP_ROTATION_ALPHABETIC = 1,
+    MAP_ROTATION_TOML_DEFINED = 2
+} map_rotation_mode_t;
+
+typedef struct string_node
+{
+    char*               string;
+    struct string_node *next, *prev;
+} string_node_t;
+
+typedef struct map
+{
+    uint8_t        map_count;
+    string_node_t* current_map;
+    vector3i_t     result_line[50];
+    size_t         map_size;
+    map_store_t       map;
+    string_node_t* map_list;
+    map_rotation_mode_t rotation_mode;
+} map_t;
+
+typedef struct map_node
+{
+    int            id;
+    vector3i_t     pos;
+    uint8_t        visited;
+    UT_hash_handle hh;
+} map_node_t;
+
+#endif

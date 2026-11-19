@@ -1,0 +1,250 @@
+name: Release
+
+# The server alone, for hosting: the binary, its two configs, start scripts
+# and a README, no maps (the server downloads the ones it plays)
+# (tools/package_server.sh), released on an ngspades-server-v* tag.
+# Running it by hand
+# (workflow_dispatch) only builds.
+#
+# Every binary runs with nothing installed: Linux is one static musl binary
+# per architecture (tools/build_server_static.sh in Alpine), Windows a static
+# .exe, macOS links only the system's libraries (tools/server_deps_macos.sh,
+# for macOS 12 and later).
+on:
+  push:
+    tags: ["ngspades-server-v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: server-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write
+
+env:
+  # no server started here may appear on the public list
+  SP_MASTER: "0"
+
+jobs:
+  linux:
+    name: server (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x86_64 }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build the static binary (Alpine, musl)
+        run: docker run --rm -v "$PWD:/src" -w /src alpine:3.22 tools/build_server_static.sh
+
+      - name: Package
+        run: |
+          version="${{ github.ref_name }}"
+          case "${{ github.ref }}" in refs/tags/*) version="${version#ngspades-server-}" ;; *) version="dev-${GITHUB_SHA::7}" ;; esac
+          sudo chown -R "$(id -u)" server/build
+          tools/package_server.sh "$version" "${{ matrix.platform }}"
+
+      - name: Check the binary
+        run: |
+          bin=dist/ngspades-server/ngspades-server
+          file "$bin"
+          ldd "$bin" 2>&1 | tee ldd.txt || true
+          grep -qE "not a dynamic executable|statically linked" ldd.txt
+          ls -l "$bin"
+
+      # the unpacked archive in images with nothing installed: the configs
+      # load, the rotation's map downloads over https (no certificates in
+      # debian and ubuntu: the built-in bundle) and the server starts
+      - name: Run in clean distributions
+        run: |
+          for image in alpine:3.22 debian:11 ubuntu:24.04 fedora:42; do
+            echo "::group::$image"
+            docker run --rm -e SP_MASTER=0 -e SP_FAST=1 -e SP_EXIT_AFTER=3 \
+              -v "$PWD/dist/ngspades-server:/ro:ro" "$image" sh -c '
+                cp -r /ro /srv/s && cd /srv/s &&
+                ./ngspades-server --check-config &&
+                ./ngspades-server --profile 075 --check-config &&
+                ./start.sh > run.log 2>&1; cat run.log | sed "s/\x1b\[[0-9;]*m//g" | grep -E "map|Map|Server started|ERROR" ;
+                grep -q "Server started" run.log && ls -l Resources/maps/*/' | tee "run-$image.txt"
+            grep -q "Server started" "run-$image.txt"
+            echo "::endgroup::"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.platform }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  macos:
+    name: server (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15-intel, platform: macos-x86_64 }
+          - { os: macos-14, platform: macos-arm64 }
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/cache@v4
+        with:
+          path: deps
+          key: server-deps-${{ matrix.platform }}-${{ hashFiles('tools/server_deps_macos.sh') }}
+
+      - name: Build OpenSSL, json-c and Lua for macOS 12
+        run: test -f deps/lib/libcrypto.a || tools/server_deps_macos.sh deps
+
+      - name: Build the server
+        run: |
+          export OPENSSL_ROOT_DIR="$PWD/deps" PKG_CONFIG_PATH="$PWD/deps/lib/pkgconfig"
+          cmake -S server -B server/build -DCMAKE_BUILD_TYPE=Release -DSERVER_STATIC=ON \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build server/build -j4
+          strip server/build/ngspades-server
+
+      - name: Package
+        run: |
+          version="${{ github.ref_name }}"
+          case "${{ github.ref }}" in refs/tags/*) version="${version#ngspades-server-}" ;; *) version="dev-${GITHUB_SHA::7}" ;; esac
+          tools/package_server.sh "$version" "${{ matrix.platform }}"
+
+      # what a Mac needs to run it: only system libraries, and the macOS
+      # version the binary asks for
+      - name: Check the binary
+        run: |
+          bin=dist/ngspades-server/ngspades-server
+          file "$bin"
+          otool -L "$bin"
+          otool -l "$bin" | grep -A4 LC_BUILD_VERSION
+          ! otool -L "$bin" | tail -n +2 | grep -v -e '/usr/lib/' -e '/System/'
+          otool -l "$bin" | grep -A4 LC_BUILD_VERSION | grep -q "minos 12.0"
+          test ! -d dist/ngspades-server/libs
+          ls -l "$bin"
+
+      - name: Run the archive
+        run: |
+          mkdir run && tar -xzf dist/*.tar.gz -C run && cd run/ngspades-server
+          ./ngspades-server --check-config
+          ./ngspades-server --profile 075 --check-config
+          SP_FAST=1 SP_EXIT_AFTER=3 ./ngspades-server 2>&1 | sed $'s/\x1b\\[[0-9;]*m//g' | tee run.log | grep -E "map|Map|Server started|ERROR"
+          grep -q "Server started" run.log
+          ls -l Resources/maps/*/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.platform }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: server (windows-x86_64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git make zip
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-json-c mingw-w64-ucrt-x86_64-readline mingw-w64-ucrt-x86_64-lua54
+            mingw-w64-ucrt-x86_64-curl mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-zlib
+
+      - name: Build the static server
+        run: |
+          cmake -S server -B server/build -G "MSYS Makefiles" -DCMAKE_BUILD_TYPE=Release -DSERVER_STATIC=ON
+          cmake --build server/build -j4
+          strip server/build/ngspades-server.exe
+
+      - name: Package
+        run: |
+          version="${{ github.ref_name }}"
+          case "${{ github.ref }}" in refs/tags/*) version="${version#ngspades-server-}" ;; *) version="dev-${GITHUB_SHA::7}" ;; esac
+          tools/package_server.sh "$version" windows-x86_64
+
+      # no DLL but Windows' own
+      - name: Check the binary
+        run: |
+          bin=dist/ngspades-server/ngspades-server.exe
+          file "$bin"
+          ldd "$bin"
+          ! ldd "$bin" | grep -iE '/(ucrt64|mingw64|usr)/'
+          ! ls dist/ngspades-server/*.dll 2>/dev/null
+          ls -l "$bin"
+
+      - name: Run the archive
+        run: |
+          mkdir run && cd run && unzip -q ../dist/*.zip && cd ngspades-server
+          ./ngspades-server.exe --check-config
+          ./ngspades-server.exe --profile 075 --check-config
+          SP_FAST=1 SP_EXIT_AFTER=3 ./ngspades-server.exe 2>&1 | sed $'s/\x1b\\[[0-9;]*m//g' | tee run.log | grep -E "map|Map|Server started|ERROR"
+          grep -q "Server started" run.log
+          ls -l Resources/maps/*/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-windows-x86_64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: [linux, macos, windows]
+    if: startsWith(github.ref, 'refs/tags/') && !cancelled() && needs.linux.result == 'success' && needs.macos.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # the notes: the tag's message, then the commits since the previous tag
+      - name: Write the release notes
+        run: |
+          git fetch --force --tags
+          tag="$GITHUB_REF_NAME"
+          prev=$(git describe --tags --abbrev=0 --match 'ngspades-server-v*' "$tag^" 2>/dev/null || true)
+          {
+            git tag -l --format='%(contents)' "$tag"
+            echo
+            if [ -n "$prev" ]; then
+              echo "## Server changes since $prev"
+              range="$prev..$tag"
+            else
+              echo "## Server changes"
+              range="$tag"
+            fi
+            echo
+            git log --no-merges --pretty='- %s (%h)' "$range"
+          } > notes.md
+          cat notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --title "${GITHUB_REF_NAME}" --notes-file notes.md

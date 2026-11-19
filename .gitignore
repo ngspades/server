@@ -1,0 +1,17 @@
+# build trees
+server/build/
+server/build-asan/
+common/proto10/build/
+common/ngmap/build/
+tools/p10probe/build/
+dist/
+# what a running server writes in its root
+server/Bans.json
+server/logs/
+server/ngmap/
+server/data-075/
+server/master.key
+server/webrtc.pem
+server/Resources/plugins/*
+!server/Resources/plugins/README.md
+server/Resources/plugins/data/

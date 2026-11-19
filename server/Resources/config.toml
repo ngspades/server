@@ -1,0 +1,483 @@
+[server]
+# The server's name. This is shown on the server list. "{game}" (here and in
+# the messages below) is the game's name, set once in common/game.cmake.
+name = "[S&D] ngCTF 24/7"
+
+# Port for the server to listen on
+port = 32887
+
+# Gamemode to use (--gamemode ctf|ngctf|babel|arena|zombie overrides it;
+# the client's Singleplayer passes its own choice, with --map)
+# 0 = ctf, classic: the 0.75 rules (no perks, assists, spotting or squad spawn)
+# 6 = ngctf, next gen: CTF with perks (jetpack, sentry, MG), kill
+#     assists, 3D spotting, respawn next to a squadmate and the rally point
+# 1 = tc, territory control
+# 2 = babel
+# 3 = arena (rounds, no respawn: the map needs [arena] gates)
+# 4 = zombie
+# 7 = creative (building only)
+# 8 = tdm, team deathmatch
+# 9 = koth, king of the hill
+gamemode = 6
+
+# Max flag captures
+capture_limit = 10
+
+# Enable this if you want your server to show up on the server list
+master = false
+
+# Let gamepad players use aim assist (the crosshair slows down over an enemy
+# and aiming pulls it a little toward one). Each player can still turn it off
+# in their settings; false forbids it for everyone on this server.
+aim_assist = true
+
+# How far players are seen, in blocks (32 to 256; 128 is Ace of Spades
+# 0.75's): enemies are sent only within it (8 blocks more), every player's
+# game shows bodies up to it (fading out over the last 16) and the bots see
+# as far. The terrain is the player's own View distance setting, up to the
+# whole map. 192 measured on Busan_Port with 127 bots: 12.6 KB/s to a client
+# against 8.0 at 128.
+fog_distance = 192
+
+# Map rotation
+# List the maps you want to use: those not in Resources/maps/ are downloaded
+# at start-up ([maps] below)
+# Each map must be in its own folder: Resources/maps/MapName/MapName.{vxl,toml}
+# The folder name, .vxl filename, and .toml filename must match exactly
+maps = [
+    "Busan_Port",
+]
+
+# Rotation modes:
+#   "toml"       - Rotate through maps in the order defined above (default)
+#   "alphabetic" - Rotate through maps alphabetically in order
+#   "random"     - Randomly select a map on server start/restart
+map_rotation_mode = "toml"
+
+# Messages to send upon joining ("{game}" is the game's name)
+welcome_messages = [
+    "Welcome to {game}!",
+    "In next gen CTF kills and intel captures earn your class's perk, in your tool bar (6)",
+    "{game} is still in development, so expect some bugs"
+]
+
+# Messages to send periodically
+periodic_messages = [
+    "Capture the enemy intel and bring it back to your base to score",
+    "Carrying the intel or capturing it earns perk points faster than kills",
+    "Build cover with blocks: bots do it too",
+    "The host can add bots and change their difficulty from the ESC menu"
+]
+
+
+# Team configuration
+[teams]
+# the light blue of the menu boards (Jagex's): a pure 0, 0, 255 read dark
+# and violet on the boards and in the world
+team1 = { name = "Blue Team", color = [62, 153, 234] }
+team2 = { name = "Green Team", color = [0, 255, 0] }
+
+
+# User passwords
+# /login [role] [password]
+[passwords]
+manager   = "changeme1"
+admin     = "changeme2"
+moderator = "changeme3"
+guard     = "changeme4"
+trusted   = "changeme5"
+
+# Maps the rotation names that are not in Resources/maps/ (nor in
+# --maps-dir) are downloaded at start-up from the public maps repository,
+# github.com/ngspades/maps (raw.githubusercontent.com, https only),
+# checked, and kept in Resources/maps/ (or the data folder's maps/ when
+# Resources/ cannot be written). /map <Name> of a map not installed
+# downloads it in the background. false: only the maps already here play.
+# SP_MAP_DOWNLOAD=0|1 wins.
+[maps]
+download = true
+
+
+# Jetpack perk (protocol 1.1, docs/protocol-1.0.md 12.4). Nobody has it by
+# default: the perk system grants it for one life. All keys are optional.
+# The numbers are the retail release's jump pack: a lever bite of 0.133 s
+# paid once per press (gone from the tank), then 1.2 s of sustained thrust,
+# regen in the air as well as on the ground but blocked 2 s after standing
+# on a hit. Max_rise is a hard cap (the retail mover shaped its climb with
+# per-frame drag; our integrator is continuous, so a cap behaves the same
+# at every frame length).
+[jetpack]
+enabled        = true
+fuel_seconds   = 1.333 # the whole tank, the ignition bite included; thrust lasts 1.2 s after it
+regen_seconds  = 10.0  # seconds from empty to full, standing or airborne
+thrust         = 86.4  # upward acceleration, blocks/s^2 (gravity is 32)
+max_rise_speed = 28.0  # fastest climb, blocks/s
+air_control    = 0.5   # horizontal acceleration while thrusting (walking is 1, airborne 0.1)
+glide_control  = 0.2   # horizontal acceleration between pulses; the retail release keeps accelerating at 0.5 between pulses too, so set 0.5 here to match it
+ignition_cost_seconds = 0.133 # the per-press bite, paid once when thrust starts
+refill_delay_seconds  = 2.0   # regen blocked this long after standing on a hit
+# TEST ONLY: grant the jetpack to every human on every spawn (also SP_JETPACK_TEST=1).
+test_grant_on_spawn = false
+
+
+# Perks (protocol 1.0, docs/protocol-1.0.md 12.5). Progress is earned per life
+# and each perk has its own counter, so "jetpack only for a capture" and
+# "sentry after 5 kills" can coexist. All keys are optional.
+# Perks are given with nothing to press: the jetpack is worn the moment it is
+# earned, the sentry goes to slot 5 of the tool bar and is placed with fire.
+[perks]
+# What one event is worth, inherited by every perk that does not override it
+kill_points         = 1   # per enemy kill (weapon, headshot, spade, grenade)
+intel_pickup_points = 1   # per enemy intel pickup
+intel_capture_points = 3  # per intel capture at your own base
+
+[perks.jetpack]
+points = 0                # free on every spawn, like the Rocketeer's (ngctf)
+enabled = true
+# reset_on_death = true   # false: progress survives death (once per round)
+# kill_points = 1         # optional: overrides the [perks] weight above
+# intel_pickup_points = 0 # 0 = this event earns nothing for this perk
+# intel_capture_points = 3
+
+[perks.sentry]
+points = 5
+enabled = true
+# reset_on_death = true
+# kill_points = 1
+# intel_pickup_points = 0
+# intel_capture_points = 3
+
+# The Commando's streak perk (classes only): a machine gun emplacement
+# placed from slot 5 like the sentry and manned with the use key. It stays
+# where it stands through its owner's death, class or team change; it goes
+# when destroyed, when its owner leaves and at the next map.
+[perks.mg]
+points = 4
+enabled = true
+
+# The classes of the next gen CTF: Commando, Rocketeer, Marksman, Miner.
+# Each [classes.<name>] changes that class's figures (the rest keep the
+# game's); every client is told them, the class screen shows them and
+# predicts with them. Plugins may change them too (game.set_class), for
+# the map they run on: every map starts from these again.
+# The figures are the first Steam Ace of Spades' (its CLASS_* tables and
+# class loadouts): health 100, 70, 70, 85; walk 0.7 for all; sprint 1.4,
+# 1.1, 1.45, 1.4; jump 0.432, 0.36, 0.54, 0.432; wallet start 200, 500, 400,
+# 0 and max 1000, 1500, 1000, 1000; a fall hurts from 10 blocks, at 40, 10,
+# 30, 40 it takes 100, 10, 100, 100; head shots take 1.0, 1.5, 1.5, 0.5;
+# water drag 8, 8, 8, 12; the swing a spade's, 0.4 s and 35, 0.4 and 35,
+# 0.4 and 50 (pickaxe), 0.6 and 50 (superspade).
+#   health      1..1000 (what it effectively has: hp stays 0..100 and every
+#               hit is scaled by 100 / health)
+#   speed       0.3..3, times the usual ground speed (0.7 for every class)
+#   jump        0.1..1.5, the jump's upward speed (0.36 the usual; 0.54 the
+#               Marksman's, about 5 blocks)
+#   weapon      "rifle", "smg", "shotgun" or "rocket"
+#   blocks      0..65535 a life starts with
+#   blocks_max  0..65535 the wallet holds: the restock fills to it and a dig
+#               gives a block back up to it
+#   gear        "grenades" or "drill" (the grenade slot)
+#   gear_count  0..255 grenades or drill charges
+#   jetpack     true: worn from every spawn (the Rocketeer)
+#   dig         1 (the spade's usual three blocks) or 3 (the Miner's 3x3x3)
+#   perk        the streak perk: "none", "sentry", "landmine", "dynamite"
+#               or "mg"
+#   swing       0.05..2 seconds between two spade swings (0.4; the Miner 0.6)
+#   melee       0..500: the damage of its spade (or pickaxe) swing (35, 50)
+#   dig_delay   0.2..3 seconds between two right button digs (1; the Miner 0.7)
+#   block_damage 0..100, what a pellet of its guns does to a block of 100
+#               (0 the gun's own: rifle 50, SMG 34, shotgun 20; the Miner
+#               100: its shotgun breaks a block a pellet, 8 a shot at most)
+#   sprint      0..3: its sprint, which REPLACES the walk speed on the
+#               ground (0 keeps the walk: no sprint boost)
+#   water_friction 1..30: the water drag's figure (the classic 6)
+#   headshot    0.1..4: what a shot to the head does to its bodies
+#   fall_min, fall_max 0..63: the fall's distance in blocks; from fall_min
+#               the damage grows to fall_dmg at fall_max (equal: from
+#               fall_min on it takes all of it)
+#   fall_dmg    1..200: the damage at fall_max (100 kills)
+#   fall_water  0..1: a landing in water takes that much of it (0.5)
+#   secondary   a second gun swapped with the first (the gun key again, or
+#               the wheel): "none" or a weapon ("revolver": the Commando's
+#               and the Marksman's)
+#   spawn_perk  true: every life starts with one charge of its perk (the
+#               Marksman's landmine); the streak still earns one
+#   title       its name on the class screen, blurb its line there
+#   enabled     false: nobody may pick it (one class always stays on)
+# [classes.miner]
+# health = 150
+# gear_count = 3
+# [classes.rocketeer]
+# enabled = false
+
+
+# Lag compensation (protocol 1.0): judge a hit against the body the shooter
+# could see, not only the body the server has when the packet arrives. The
+# target is rewound by its round trip, bounded by max_ms + extra_ms; death,
+# respawn and teleports are never rewound. Also SP_LAGCOMP=0,
+# SP_LAGCOMP_MAX_MS and SP_LAGCOMP_EXTRA_MS.
+[net]
+lag_compensation = true
+lag_compensation_max_ms = 250
+lag_compensation_extra_ms = 50
+# One address may open this many connections in the window; 0 turns the
+# guard off. Also SP_MAX_PER_IP. Keep it at 4 or more for a household or a
+# LAN party behind one NAT.
+max_connections_per_ip = 4
+connection_window_seconds = 10
+
+
+# Zombie mode. All keys are optional; the defaults are the shipped mode.
+# Also SP_ZOMBIE_ROUNDS, SP_ZOMBIE_COUNTDOWN, SP_ZOMBIE_ROUND_SECONDS,
+# SP_ZOMBIE_INFECTION_BONUS, SP_ZOMBIE_END_SECONDS,
+# SP_ZOMBIE_FIRST_INFECTED, SP_ZOMBIE_MIN_PLAYERS, SP_ZOMBIE_RADAR,
+# SP_ZOMBIE_CLAW, SP_ZOMBIE_CLASSES and SP_ZOMBIE_NIGHT.
+[zombie]
+rounds = 3              # round wins that take the match (1..255)
+countdown = 10          # seconds to scatter before the outbreak
+round_seconds = 120     # from the outbreak
+infection_bonus = 15    # seconds more for every infection
+end_seconds = 5         # intermission between rounds
+first_infected = 0      # patient zeros; 0: one for every 6 players (at least 1); --first-infected wins
+minimum_players = 2     # below this a fight is aborted, not timed out
+zombie_respawn_seconds = 3
+radar_seconds = 5       # between the last survivor's danger pings
+claw_damage = 50        # a claw hit; the victim's health is scaled separately
+classes = false         # the survivors pick a class (the class screen); the
+                         # zombies stay zombies. Also --classes 0|1 and the
+                         # console's /classes on|off
+night = true            # the match plays at midnight, the clock stopped: the
+                         # survivors hunt with their flashlights (the bots light
+                         # theirs) and the zombies see by night vision. false
+                         # plays at the server's [sky] time; an admin's /sky
+                         # lasts until the next map start
+spawn_near_min = 35.0   # a zombie's respawn, from a living survivor
+spawn_near_max = 50.0
+
+
+# Arena mode (rounds without respawns on Counter-Strike maps). All keys are
+# optional; a map's own [arena] table and its .txt narrow them down for that
+# map, and the mode's rounds are won by the map's capture_limit.
+[arena]
+countdown_seconds = 5    # behind the closed gates before a round (1..60)
+round_seconds = 180      # a round's time limit (10..3600); the side with more
+                         # players left wins when it runs out, a draw when equal
+spawn_change = 0         # 0 keep the sides, 1 swap them on the last round,
+                         # 2 swap every round, 3 rotate the spawn points every
+                         # round, 4 rotate to one drawn at every round
+max_spawn_distance = 35  # in the countdown, farther than this from a spawn of
+                         # a player's side and it is put back on one
+team_color_seconds = 5   # the winner's colour in the fog after a round (0 off)
+
+
+# Player conduct: AFK kicks and team-grief accounting. Team damage is off by
+# default; grief still catches an explosive that hurts a teammate. Staff and a
+# listen server's own player are exempt. Also SP_AFK_KICK, SP_AFK_WARN and SP_GRIEF_KICK.
+[conduct]
+afk_kick_seconds = 600
+afk_warn_seconds = 540
+afk_spectator_kick_seconds = 1800
+grief_warn_points = 5
+grief_kick_points = 10
+grief_decay_seconds = 60
+grief_team_damage_points = 1
+grief_team_kill_points = 3
+# Reveal a player who leaves the map, sinks below it, flies above the sky,
+# is inside solid blocks, or seals itself in a small air pocket. The sealed
+# test only marks objective players (zombie survivors, intel carriers).
+escape_watch = true
+escape_watch_sky_seconds = 5
+escape_watch_embedded_seconds = 3
+escape_watch_entomb_seconds = 5
+
+
+# Anti-cheat accounting: one counter per player and check, a rate-limited
+# log line, and no ban. Hard protocol violations (NaN/inf) can kick when
+# kick_on_protocol_violation is on. Also SP_ANTICHEAT=0.
+[anticheat]
+enabled = true
+kick_on_protocol_violation = false
+log_interval_seconds = 10
+
+
+# Squads (Capture the flag only): groups of players inside a team. When you
+# respawn you appear next to a living squadmate who is not in a fight, so a
+# squad stays together at the front; with none you use the team's spawn.
+# Everyone is put in a squad automatically; the in-game menu lets a player
+# pick another one or play alone. All keys are optional.
+[squads]
+enabled = true   # false: everyone spawns at the team's spawn, as in plain CTF
+size    = 4      # players per squad (2..16)
+
+
+# Sentry perk (docs/protocol-1.0.md 12.5). All keys are optional.
+[sentry]
+# Seconds an untouched sentry lasts before wearing out and exploding.
+# 0 = it lasts forever (only gunfire destroys it). Also SP_SENTRY_LIFETIME.
+lifetime_seconds = 60
+
+# The time of day and the weather (protocol 1.0). Every client draws the
+# light, the fog and the rain or snow; by night and in bad weather everyone
+# sees less far, bots included, and a flashlight or a shot shows its owner.
+# Admins change it with /sky, plugins with game.set_sky. All keys optional.
+[sky]
+time      = "12:00"  # "hh:mm", or day, night, dawn, dusk
+rate      = 0        # minutes of the day a second (0: the time stands; 2: a day in 12 minutes)
+weather   = "clear"  # clear, rain, snow, fog or storm (rain with lightning)
+intensity = 60       # how much of it, 0..100
+moonlight = 25       # how much a night shows, 0 (only flashlights) ..100
+
+# Server-side bots. All keys are optional.
+[bots]
+# "easy", "normal" or "hard". It sets the range each bot's skill is rolled in
+# and how much its aim wobbles:
+#   easy   - rookies, barely hit beyond 10 blocks
+#   normal - poor shots: ~55% of hits at 10 blocks, ~25% at 20
+#   hard   - good players, still no aimbots
+# The host can change it during a match from the Bots menu (ESC). Also
+# SP_BOT_DIFFICULTY.
+difficulty = "normal"
+
+# Bots share short bridge projects: a builder and a nearby partner reserve
+# alternating cells, and the partner crosses once the span is solid. Set
+# false to keep the old one-bot bridges. Also SP_BOT_PROJECTS=0.
+cooperative_bridges = true
+
+# Browsers join over WebRTC (docs/web.md, docs/protocol-1.0.md "WebRTC
+# transport"): every browser player on this one UDP port (open it in the
+# firewall and forward it like the game's port). Default: the game's port
+# + 1. The STUN server tells the server its public address behind a NAT;
+# "" for none (a server with a public address does not need one). The
+# DTLS certificate is made at the first start (webrtc.pem in the data
+# folder, the certificate and its key). Also SP_WEBRTC_PORT and
+# SP_WEBRTC_STUN.
+[webrtc]
+# WebRTC is the browser transport: a match hosted from the game with
+# "Friends join by code" turns it on by itself, and its friends (and
+# browsers) join through the master's signalling. A dedicated server that
+# wants browser players sets true (SP_WEBRTC_ENABLED); a server that leaves
+# it off takes only native clients.
+enabled = false
+# port = 32888
+stun = "stun:stun.l.google.com:19302"
+
+# Our own server list (docs/web.md phase 3): the server announces itself
+# every 30 s over IPv4 and IPv6 and answers the browsers' offers through
+# it. url is the master server's address; empty: not listed (and no
+# browser can find the server). The server's key is made at the first
+# start in the data folder (key_file): it is the server's identity on the
+# list, keep it and keep it secret. country: a code shown in the list
+# ("BR"), or empty. Also SP_MASTER_URL (turns it on), SP_MASTER=0 and
+# SP_MASTER_KEY. connect_tokens: a player joining from the internet over
+# UDP needs a token from the master (asked by the game, one per join): a
+# flood of joins has to go through the master's limit. The LAN, this
+# machine, browsers and a server that has not reached the master in two
+# minutes are let in without one. SP_CONNECT_TOKENS=0|1|all.
+[master]
+enabled = true
+url = "https://master.shootanddestroy.obex.pw"
+country = ""
+key_file = "master.key"
+connect_tokens = true
+
+# A remote console (docs/rcon.md): the console's commands over a TCP
+# connection, for a tool that manages the server (sadctl, a monitor). It runs
+# any console command (not /shutdown or /login) with admin rights: keep the
+# password secret and the port off the internet. Off until enabled with a
+# password of 16 characters or more; bind stays on this machine.
+# SP_RCON_PASSWORD (turns it on), SP_RCON_PORT and SP_RCON_BIND win.
+[rcon]
+enabled = false
+bind = "127.0.0.1"
+port = 32890
+password = ""
+
+# Plugins: Lua scripts that change how the server plays, downloaded from
+# https://github.com/ngspades/plugins into Resources/plugins/
+# (they do not ship with the server; see Resources/plugins/README.md).
+# server_tools is the server's own: it ships with every server and gives the
+# admins /spawn, /spawn crate and /goto (1.0 profile).
+# Also SP_PLUGINS=a,b. A plugin's own settings go in [plugins.<name>].
+# No plugin reaches the network unless its section lists the hosts it may
+# call: allow_hosts = ["api.example.com", "*.example.org"] ("*" any host).
+[plugins]
+load = ["server_tools"]
+
+# Dangerous plugin calls are opt-in. A community plugin should not change the
+# map or run console commands without its owner saying so. game.set_mode,
+# game.set_map and game.next_map are refused unless allow_map_change = true;
+# they are queued and applied after the plugin tick (a map reset closes every
+# Lua state, so it must never run inside a Lua call). game.run_command accepts
+# only the command names listed here (without the slash); /shutdown, /login
+# and /logout are always refused. Both are logged as EVT plugin.
+allow_map_change = false
+allow_commands = []
+
+
+# Spawn protection: a short grace after a spawn, during which enemy fire is
+# refused. Firing ends it at once; falling and water still hurt. 0 turns it
+# off. Also SP_SPAWN_PROTECT (seconds).
+[gameplay]
+spawn_protection_seconds = 2
+# The physics (protocol 1.0 only; the 0.75 profile keeps 0.75's): the jump's
+# upward velocity and the landing speed falls start to hurt from. Every 1.0
+# client plays by them (the world parameters player-jump-vel and
+# fall-damage-vel). A class's own jump ([classes.<name>] jump) wins.
+jump_velocity = 0.36
+fall_damage_velocity = 0.58
+
+
+# Admin audit: every command, host command and remote console line is appended to this
+# file (and to the normal event log as EVT admin). The rcon password is never
+# written. Set enabled = false to keep only the event-log line.
+[audit]
+enabled = true
+file = "logs/admin.log"
+
+
+# Mode presets: one table per mode, selected with --preset <name> or
+# [server] preset = "name" (SP_PRESET overrides for tests). A preset may set
+# gamemode, maps, capture_limit, aim_assist, fog_distance, bot_difficulty and plugins;
+# --gamemode/--map still win.
+# The plugin settings themselves stay in [plugins.<name>].
+[presets.ngctf]
+gamemode = 6
+maps = ["Busan_Port", "Raindance"]
+capture_limit = 5
+bot_difficulty = "normal"
+plugins = []
+
+[presets.zombie]
+gamemode = 4
+maps = ["Normandie", "Beaulieu_Abbey_Zombie", "Zombie_Island"]
+capture_limit = 3
+bot_difficulty = "normal"
+plugins = []
+
+[presets.tdm]
+gamemode = 8
+maps = ["Normandie", "2Fort_CTF", "Raindance"]
+capture_limit = 100
+bot_difficulty = "normal"
+plugins = []
+
+[presets.arena]
+gamemode = 3
+maps = ["csitaly"]
+capture_limit = 5
+bot_difficulty = "normal"
+plugins = []
+
+[presets.babel]
+gamemode = 2
+maps = ["babelstairs", "Nine-Eye_Babel"]
+capture_limit = 10
+bot_difficulty = "normal"
+plugins = []
+
+[presets.koth]
+gamemode = 9
+maps = ["Normandie", "hiesville", "20thCenturyTown"]
+capture_limit = 90
+bot_difficulty = "normal"
+plugins = []

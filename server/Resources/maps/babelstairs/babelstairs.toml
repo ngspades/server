@@ -1,0 +1,13 @@
+[map]
+modes = ["babel"]
+author = "babelstairs"
+fog_color = [128, 232, 255]
+map_size = [512, 512, 64]
+capture_limit = 10
+water_damage_enabled = true
+water_damage_per_second = 40
+
+# hand-written from the map script (BLUE_RECT/GREEN_RECT, which sync_maps.py cannot read)
+[spawnpoints]
+team1 = { start = [100, 230, 0], end = [126, 281, 0] }
+team2 = { start = [385, 230, 0], end = [411, 281, 0] }

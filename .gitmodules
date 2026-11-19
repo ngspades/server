@@ -1,0 +1,9 @@
+[submodule "common/enet"]
+	path = common/enet
+	url = https://github.com/ngspades/enet
+[submodule "common/vxl"]
+	path = common/vxl
+	url = https://github.com/xtreme8000/libvxl
+[submodule "server/Extern/tomlc99/tomlc99"]
+	path = server/Extern/tomlc99/tomlc99
+	url = https://github.com/cktan/tomlc99

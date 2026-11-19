@@ -1,0 +1,92 @@
+name: CI
+
+# Every push and pull request: the server built on Linux and macOS with
+# warnings as errors, protocol 1.0's codec tests (fuzzed), the 0.75
+# extensions' tests, both shipped configs checked, every game mode played by
+# bots under AddressSanitizer and UndefinedBehaviorSanitizer. Releases are
+# release.yml's.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # no server started here may appear on the public list or reach the network
+  SP_MASTER: "0"
+  SP_MAP_DOWNLOAD: "0"
+
+jobs:
+  linux:
+    name: Linux (build, tests, sanitizers)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config \
+            libjson-c-dev libssl-dev libcurl4-openssl-dev zlib1g-dev libreadline-dev \
+            liblua5.4-dev
+
+      - name: Cache the fetched dependencies (libdatachannel)
+        uses: actions/cache@v4
+        with:
+          path: |
+            server/build/_deps
+            server/build-asan/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('server/cmake/*.cmake', 'server/CMakeLists.txt') }}
+
+      - name: Build (Release, -Werror)
+        run: make server
+
+      - name: Protocol 1.0 codec tests
+        run: make test-proto10
+
+      - name: 0.75 extensions tests
+        run: make test-ext075
+
+      - name: Shipped configs
+        run: make config-check
+
+      - name: Protocol 1.0 handshake and error paths
+        run: make probe-proto10
+
+      - name: Build with the sanitizers
+        run: make server-asan
+
+      - name: Every game mode under the sanitizers
+        # the maps come from ngspades/maps: none is kept in this repository
+        env:
+          SP_MAP_DOWNLOAD: "1"
+        run: tools/smoke_modes.sh server/build-asan/$(sed -n 's/^set(GAME_SERVER_NAME "\(.*\)")/\1/p' common/game.cmake) 4000
+
+  macos:
+    name: macOS (build, tests)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Dependencies
+        run: brew install json-c openssl@3 lua pkg-config
+
+      - name: Build (Release, -Werror)
+        run: make server
+
+      - name: Protocol 1.0 codec tests
+        run: make test-proto10
+
+      - name: Shipped configs
+        run: make config-check
