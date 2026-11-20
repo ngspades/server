@@ -202,8 +202,10 @@ static const ck_key_t ck_sky_keys[] = {
     {"time", CK_10}, {"rate", CK_10}, {"weather", CK_10}, {"intensity", CK_10}, {"moonlight", CK_10}, CK_END,
 };
 
-/* Bots.c, BotProjects.c */
-static const ck_key_t ck_bots_keys[] = {{"difficulty", CK_ALL}, {"cooperative_bridges", CK_ALL}, CK_END};
+/* Bots.c, BotProjects.c, BotForts.c */
+static const ck_key_t ck_bots_keys[] = {
+    {"difficulty", CK_ALL}, {"cooperative_bridges", CK_ALL}, {"cooperative_forts", CK_ALL}, CK_END,
+};
 
 /* Net/WebRtc.c (turn and turns: the TURN servers, plan section 10.3) */
 static const ck_key_t ck_webrtc_keys[] = {

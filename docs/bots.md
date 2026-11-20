@@ -253,13 +253,88 @@ the ordinary block action (reach, support, rate and the player's wallet).
   expires after 30 s.
 - `[bots] cooperative_bridges = true` (default; `SP_BOT_PROJECTS=0` for
   tests). `EVT bot_project action=create|cell|built|expire|takeover`.
-- Bounded on purpose: short bridges only. The full BattleSpades layer also
-  has breach tunnels, prefab cover, sniper outposts and ramparts; those are
-  still open.
+- Bounded on purpose: short bridges only. The cooperative cover is the
+  fortifications below; the full BattleSpades layer also has breach tunnels
+  and single-bot sniper outposts, which are still open.
 - **Licence:** BattleSpades is AGPL-3.0, which cannot be merged into this
   GPL-3.0 tree. This is an independent, much smaller implementation of the
   same behaviour (read from its design notes, not copied code); do not paste
   its source here.
+
+## Cooperative fortifications
+
+Where an objective is held by a group, the bots raise a structure on it
+together (`Server/BotForts.c`). The shapes come from the same place as the
+bridges: BattleSpades' schematic library and its prefabs (`bunker`,
+`watchtower`, `objective_ring`, `fort_wall`), read as ideas and reimplemented
+with this server's own cells and its ordinary block action. Every cell is
+validated by the server: support, reach, the block rate, protected cells and
+the water level are the same rules a player meets.
+
+- **Ring** (22 cells on flat ground, more where a column has to be skipped):
+  a one-cell-high circle of radius four with a **three-cell gate on each
+  side** of the threat line, and a battlement post on each diagonal. It is
+  the first thing a team raises at a territory or on a hill: cover a bot can
+  shoot over and walk into through a gate.
+- **Bunker** (19 cells, 3 x 3): a one-high firing wall at the front, two-high
+  sides, a roof over the back two rows and a two-high door at the back. Bots
+  inside fire over the front and are covered from above; the door keeps the
+  walkable exit the server wants.
+- **Tower** (17 cells, 2 x 2 and three high): a solid lookout with a parapet
+  on the threat side and a one-block stair up one side. The stair needs three
+  level columns; the builder tries the back first, then the sides, so a
+  tower is only raised where its top can be reached. A two-by-two footprint
+  three high was chosen after a three-by-three one was lost half built on a
+  contested hill.
+- The shapes follow a **plinth**: a bunker or a tower on a slope of up to two
+  cells gets foundation cells under its lower columns; a ring instead puts
+  each of its cells on its own column's ground. A slope steeper than that is
+  no site for a bunker or a tower, and the mode is told no.
+- Cells are built **bottom up and from outside**: a cell is claimed only
+  when it has a solid neighbour now and a bot can stand where it reaches it
+  without being inside the structure. A stand inside a ring or a bunker is
+  the last choice (it has to be walked into through a gate); the parapet and
+  the roof become claimable only once the wall below them exists. A builder
+  places as soon as the server's four-block reach is met, not only on the
+  exact stand: a bot that stopped at the stand's edge never placed and read
+  as stuck.
+- **Who builds:** the mode asks for a structure and the nearest up to four
+  living bots of that team with blocks are assigned, within 26 blocks of the
+  site. A dead builder's slot is refilled by a mate respawning near it. A
+  builder keeps working while no enemy is within 12 blocks and it is not
+  being shot at; closer than that it fights, then goes back to the work. It
+  still uses its gun, so a fort goes up under fire.
+- A structure is **complete** when every cell is solid; it is then kept (the
+  mode can put the rank 0 bot on a tower's top, `bot_fort_top`) and repaired
+  if it is shot open while its builders are near. An unfinished one expires
+  after 90 s (renewed by every cell placed). At most 16 structures live; the
+  oldest complete one gives its place up when a new one is asked for. The
+  sites are shared: one structure of each kind a site, whatever team raised
+  it, and a territory that changes hands drops the old owner's structures
+  (`bot_fort_discard`), whose cells stay standing.
+- The structures are the **team's colour**, so players can find their
+  team's fort; the quick walls a post raises stay the ground's colour, as
+  camouflage.
+- `[bots] cooperative_forts = true` (default; `SP_BOT_FORTS=0` for tests).
+  `EVT bot_fort action=create|assign|place|complete|damaged|expire|discard|
+  status|refused why=shape|water|protected|overlap|unreachable|no_builders`.
+- **Where:** king of the hill raises a tower at the hill's middle from three
+  bots of the team on it together, then, with the hill **held**, a ring from
+  four. The ring 0 bot moves onto the tower's top once it is complete
+  (`EVT bot_goal goal=hill-tower-top`); without a tower it keeps its old
+  four-block pillar. Territory control raises a ring at a territory from
+  three bots of the team there, and the **holder** then roofs the middle
+  with a bunker. The ring changes the hold places: on king of the hill and
+  territory control the bots keep inside the ring or outside it, never on
+  its wall (a spot on the wall read as stuck at its foot).
+- Measured, 12 bots, 600 s, three seeds, Raindance and hiesville: king of
+  the hill 4.7 structures a match, 3.3 complete, the rank 0 on a tower 92
+  goal checks, 4.67 rounds and 74.3 kills (73.7 before, within the spread);
+  territory control 2.7 structures a match, 2.3 complete, 14.3 captures
+  (11.7 before) and no stuck bots. The benchmark runs took the same 0.05 to
+  0.09 ms a tick (a match's structures are a few hundred cells).
+- **Licence:** the same as the bridges. BattleSpades is AGPL-3.0; this is
+  our own implementation of the idea, no cell list and no code taken from it.
 
 ## Forward posts on large maps
 
@@ -332,8 +407,11 @@ in more places.
 Every bot of a team has a job on the hill, the same one every life (by its
 place among the team's bots):
 
-- The first raises a tower of four blocks in the middle of the hill and
-  fights from its top, which still counts as on the hill.
+- The first is the tower's keeper: with three bots of the team on the hill
+  together the team raises a cooperative watchtower in its middle (the
+  section above), and once it is complete he stands on its top, which still
+  counts as on the hill. Until then (or on ground that refuses a tower) he
+  builds the old four-block pillar and fights from it.
 - With the classes on, the team's first two Marksmen watch the hill from
   high ground round it instead of standing on it (a rifle on the hill is
   wasted at ten blocks): the highest solid ground that sees the hill, a
@@ -342,8 +420,10 @@ place among the team's bots):
   out, two holders a block and a half either side of a spoke, at most two
   thirds of the team. Each pair builds one bunker: a front five wide with
   a loophole in the middle, high at its ends, and a low wing at each side.
-  The team that holds the hill walls it in.
-- The others take a place on the hill and fight there.
+  The team that holds the hill walls it in. With the hill held and four
+  bots on it, the team also rings it with the battlemented ring.
+- The others take a place on the hill and fight there; with a ring they
+  hold inside it or outside, never on its wall.
 - A Marksman whose way to its spot is cut, or who walks to it too long,
   takes another spot, but only once it is within a hundred blocks of it:
   from its spawn, three hundred blocks off, it gave up spot after spot
@@ -481,12 +561,14 @@ so the server logs them (`Player Bot_.. (Team) said: ..`).
 - Each life it picks a spot on its own side: high ground between its spawn
   and the enemy, scored by height and by how much of the way toward the
   enemy it can see.
-- There it puts up a castle wall the colour of the ground, facing the enemy
-  (five wide and a block high, a wing two high at each side: BattleSpades'
-  fort wall, 9 blocks), and stands behind it shooting over the top. It only
-  ducks to reload. Every post's wall leaves the way it shoots open: a wall
-  two high a block away covered a standing bot's eye for any shot down a
-  hill, and a crouched one's entirely.
+- There it puts up a castle front the colour of the ground, facing the enemy
+  (seven wide and a block high through the firing lane, a three-high tower
+  at each end and a two-high wing behind each: 15 blocks, from the idea of
+  BattleSpades' fort wall), and stands behind it shooting over the middle.
+  It only ducks to reload. Every post's front leaves the way it shoots open:
+  a wall two high a block away covered a standing bot's eye for any shot
+  down a hill, and a crouched one's entirely. The towers are at the ends,
+  where they cover the flanks instead of the lane.
 - It does not leave the spot to fight: it shoots whoever shows within the
   rifle's range. Away from the spot it fights like an attacker, and with the
   intel it runs home.
@@ -846,11 +928,11 @@ Examples from the modes (`server/Source/Server/Gamemodes/`):
 
 - **CTF:** `take-intel` (`TAKE | PUSH`, `exact`); the squad leader's `lead` (`PUSH | SQUAD | WITH`, the next waypoint); `follow` (the leader, `hold` 4); the guard's `defend` (`GUARD | HOME`, role `DEFEND`, `home` our intel); `carry-home` (`rush`).
 - **Babel:** `climb` (`climb` 1 in the ladder's column); `stair-build` (`work` 1 at the next step, `keep_terrain`, `walk_only`); `babel-hunt` (`CHASE`, role `RUSH`: the nearest enemy on the ground); `babel-wall` (`work` 1 at a missing wall cell) and `babel-window` (`POST`, a window to hold behind).
-- **KotH:** the tower builder (`climb` in the hill's middle); the posts round the ring (`POST`, a castle wall facing out); the rest `hill` (role `RUSH`, shooting on the move, until on it; then `hold` and `watch` outward).
+- **KotH:** the tower builder (`climb` in the hill's middle, or `hill-tower-top` on a complete cooperative tower); the posts round the ring (`POST`, a castle front facing out); the rest `hill` (role `RUSH`, shooting on the move, until on it; then `hold` and `watch` outward).
 - **Zombie:** the survivors' `high-ground` (`walk_only`, `hold`, `watch` outward, role `RUSH` on the way); `roof-climb` (`climb` 1 against the roof's wall). The zombies have no goal at all: `GM_RULE_NO_GUN` gives them the melee brain.
-- **TC:** `tc-take` / `tc-defend` / `tc-hold` (a territory, `hold`). Bots and
-  players respawn at the team's territory nearest the front that has no
-  enemy within 96 blocks, behind it, facing the next territory to take.
+- **TC:** `tc-take` / `tc-defend` / `tc-hold` (a territory, `hold`; a ring changes the places to inside or outside it, and a completed bunker gives every third bot the middle).
+  Bots and players respawn at the team's territory nearest the front that has
+  no enemy within 96 blocks, behind it, facing the next territory to take.
 - **Arena:** `gate` (hold at the spawn while the gates are shut); `push` (the bot's lane point).
 - **A Lua mode:** `objective` (`game.objective(x, y, radius)`: each bot its own spot inside, `hold`).
 

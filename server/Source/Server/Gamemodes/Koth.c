@@ -1,6 +1,7 @@
 // Copyright (c) 2026 ngspades contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <Server/Classes.h>
+#include <Server/BotForts.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Gamemode.h>
 #include <Server/Gamemodes/Koth.h>
@@ -67,6 +68,7 @@ static struct
     uint64_t deadline;
     uint64_t next_score;
     uint64_t break_until;
+    uint64_t next_fort; /* the next look for a structure on the hill */
     uint8_t  ended;
 } koth;
 
@@ -207,6 +209,7 @@ static void _koth_place(server_t* server)
         koth.hz = map_top(&server->s_map.map, (uint16_t) koth.hx, (uint16_t) koth.hy);
     }
     koth.floor = _koth_floor(&server->s_map.map, koth.hx, koth.hy, koth.hz);
+    koth.next_fort = get_nanos(); /* the team that takes it may fortify at once */
     float ax, ay, bx, by;
     _koth_spawn_middle(server, TEAM_A, &ax, &ay);
     _koth_spawn_middle(server, TEAM_B, &bx, &by);
@@ -227,6 +230,7 @@ static void _koth_init(server_t* server)
     uint64_t now     = get_nanos();
     koth.deadline    = now + (uint64_t) KOTH_SECONDS * NANO_IN_SECOND;
     koth.next_score  = now;
+    koth.next_fort   = now;
     koth.ended       = 0;
     koth.round       = 1;
     koth.state       = KOTH_FIGHT;
@@ -338,6 +342,50 @@ static void _koth_count(server_t* server)
     _koth_place(server);
 }
 
+/* the way the other team comes from, for the structures' facing */
+static void _koth_face_enemy(server_t* server, int team, int* fx, int* fy)
+{
+    float ex, ey;
+    _koth_spawn_middle(server, team == TEAM_A ? TEAM_B : TEAM_A, &ex, &ey);
+    float dx = ex - ((float) koth.hx + 0.5f), dy = ey - ((float) koth.hy + 0.5f);
+    if (fabsf(dx) >= fabsf(dy)) {
+        *fx = dx >= 0.0f ? 1 : -1;
+        *fy = 0;
+    } else {
+        *fx = 0;
+        *fy = dy >= 0.0f ? 1 : -1;
+    }
+}
+
+/* When a team is on the hill together it fortifies it: from three bots a
+   watchtower at its middle (the rank 0 bot's old pillar, now raised by the
+   structure's builders), from four a battlemented ring with a gate each
+   side. The structures are shared cover; the bots building them are the
+   nearest of that team, up to four. A structure is asked for every five
+   seconds; the request itself says no while one of the kind stands there. */
+static void _koth_forts(server_t* server)
+{
+    for (int team = TEAM_A; team <= TEAM_B; team++) {
+        int n = koth.on[team];
+        if (n < 3) {
+            continue;
+        }
+        int fx, fy;
+        _koth_face_enemy(server, team, &fx, &fy);
+        /* the tower first, while the team is on the hill together: it is the
+           rank 0 bot's lookout and it has to go up before the fight settles
+           into a hold. The ring needs the hill actually held, or two teams
+           asking for the same spots left both structures half done. */
+        int made = bot_fort_request(server, (uint8_t) team, BOT_FORT_TOWER, koth.hx, koth.hy, koth.hz, fx, fy);
+        if (koth.holder == team && n >= 4 &&
+            (bot_fort_complete(BOT_FORT_TOWER, koth.hx, koth.hy, 6) ||
+             (!made && !bot_fort_exists(BOT_FORT_TOWER, koth.hx, koth.hy, 6))))
+        {
+            bot_fort_request(server, (uint8_t) team, BOT_FORT_RING, koth.hx, koth.hy, koth.hz, fx, fy);
+        }
+    }
+}
+
 static void _koth_tick(server_t* server)
 {
     if (koth.ended) {
@@ -354,6 +402,10 @@ static void _koth_tick(server_t* server)
         if (koth.ended) {
             return;
         }
+    }
+    if (now >= koth.next_fort) {
+        koth.next_fort = now + 5ull * NANO_IN_SECOND;
+        _koth_forts(server);
     }
     if (now >= koth.deadline) {
         _koth_end(server, "time");
@@ -480,6 +532,32 @@ static int _koth_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
        walls do not fight over the same cells */
     float team_turn = bot->team == TEAM_A ? 0.0f : 3.14159265f / KOTH_FORTS;
     if (rank == 0) {
+        /* a watchtower the team raised (or one the enemy did: the cover is
+           shared): stand on its top and watch the other side. While it is
+           going up, hold beside it and let its builders work */
+        float tx, ty;
+        int   tf;
+        if (bot_fort_top(BOT_FORT_TOWER, koth.hx, koth.hy, 6, &tx, &ty, &tf)) {
+            out->x  = tx;
+            out->y  = ty;
+            out->z  = (float) tf;
+            gm_goal_name(out, "hill-tower-top", 0);
+            out->hold = 1.2f;
+            float ex, ey;
+            _koth_spawn_middle(server, bot->team == TEAM_A ? TEAM_B : TEAM_A, &ex, &ey);
+            out->watch_x = ex;
+            out->watch_y = ey;
+            return 1;
+        }
+        if (bot_fort_exists(BOT_FORT_TOWER, koth.hx, koth.hy, 6)) {
+            float a = bot->team == TEAM_A ? 0.0f : 3.14159265f;
+            _koth_spoke(server, a, KOTH_RADIUS * 0.55f, &out->x, &out->y);
+            gm_goal_name(out, "hill", 0);
+            out->hold    = 1.5f;
+            out->watch_x = out->x + cosf(a) * 8.0f;
+            out->watch_y = out->y + sinf(a) * 8.0f;
+            return 1;
+        }
         out->x = koth.hx + (bot->team == TEAM_A ? -0.5f : 1.5f);
         out->y = koth.hy + 0.5f;
         if (!_koth_level(&server->s_map.map, (int) out->x, (int) out->y, koth.hz)) {
@@ -536,7 +614,14 @@ static int _koth_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
         return 1;
     }
     float a = (float) bot->id * 2.399963f;
-    _koth_spoke(server, a, KOTH_RADIUS * 0.55f * (float) ((bot->id % 4) + 1) / 4.0f, &out->x, &out->y);
+    /* the structures take the middle and a ring at four cells: hold inside
+       the ring or outside it, never on its wall (the path there read as
+       stuck at the wall's foot) */
+    float r = KOTH_RADIUS * 0.55f * (float) ((bot->id % 4) + 1) / 4.0f;
+    if (bot_fort_exists(BOT_FORT_RING, koth.hx, koth.hy, 8) || bot_fort_exists(BOT_FORT_TOWER, koth.hx, koth.hy, 8)) {
+        r = bot->id % 3 == 0 ? 3.0f : 6.5f + (float) (bot->id % 3) * 1.2f;
+    }
+    _koth_spoke(server, a, r, &out->x, &out->y);
     gm_goal_name(out, "hill", 0);
     out->perch   = KOTH_RADIUS; /* any height over the ring holds the hill */
     out->hold    = 1.5f;

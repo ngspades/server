@@ -93,6 +93,7 @@ set(SERVER_HEADERS
     Bots.h
     BotGoal.h
     BotProjects.h
+    BotForts.h
     Grenade.h
     HostPackets.h
     Nodes.h
@@ -213,6 +214,7 @@ set(SERVER_SOURCES
     BotThink.c
     BotPlanner.c
     BotProjects.c
+    BotForts.c
     Grenade.c
     Nodes.c
     Staff.c

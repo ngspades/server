@@ -9,6 +9,7 @@
 #include <Server/BotsInternal.h>
 #include <Server/Plugins.h>
 #include <Server/BotProjects.h>
+#include <Server/BotForts.h>
 
 /* what a think works with, shared by its parts (_think_*) */
 typedef struct
@@ -471,6 +472,11 @@ static void _think_walk(server_t* server, player_t* bot, bot_ai_t* ai, bot_think
         ai->next_think = t->now + BOT_BLOCK_WAIT;
         return;
     }
+    /* in the stand a structure assigned it: put the reserved cell */
+    if (bot_fort_step(server, bot)) {
+        ai->next_think = t->now + BOT_BLOCK_WAIT;
+        return;
+    }
     if (ai->phase != BOT_PHASE_PATROL) {
         _bot_set_phase(bot, ai, BOT_PHASE_PATROL, 0);
     }
@@ -542,9 +548,11 @@ static void _think_walk(server_t* server, player_t* bot, bot_ai_t* ai, bot_think
             ai->clear_until   = t->now + _bot_secs(8.0f);
             ai->goal_progress = t->now;
             ai->goal_best     = pd;
-            evt_log(bot, "bot_path", "action=stuck goal=%s dist=%.1f floor=%d goal_floor=%d pos=%.1f,%.1f,%.1f air=%u wet=%u escaping=%u",
+            evt_log(bot, "bot_path",
+                    "action=stuck goal=%s dist=%.1f floor=%d goal_floor=%d pos=%.1f,%.1f,%.1f air=%u wet=%u escaping=%u fort=%u",
                     ai->mode_goal, pd, _bot_floor_cell(server, bot), t->gfloor, bot->movement.position.x,
-                    bot->movement.position.y, bot->movement.position.z, bot->airborne, bot->wade, ai->escaping);
+                    bot->movement.position.y, bot->movement.position.z, bot->airborne, bot->wade, ai->escaping,
+                    bot_fort_builder(bot));
             plugins_on_bot_stuck(server, bot, "no_progress");
         }
         if (ai->clear_until > t->now && pd > 0.6f && ai->role != GM_BOT_COVER) {
@@ -1170,6 +1178,27 @@ void _bot_think(server_t* server, player_t* bot, bot_ai_t* ai)
             t->exact  = 0;
         }
     }
+    {
+        /* a structure the team raises takes the walk over too: its cell's
+           stand is the goal and the mode's post, hold and climb wait until it
+           is up. Its intent is cleared: a post bot assigned to the ring is not
+           camping, it is building */
+        float fx, fy;
+        int   ff;
+        if (bot_fort_goal(server, bot, &fx, &fy, &ff)) {
+            t->has_goal     = 1;
+            t->gx           = fx;
+            t->gy           = fy;
+            t->gfloor       = ff;
+            t->exact        = 0;
+            t->rush         = 0;
+            t->assault      = 0;
+            ai->goal_intent = 0;
+            ai->goal_hold   = 0.0f;
+            ai->goal_climb  = 0;
+            ai->work        = 0;
+        }
+    }
     t->guard  = t->has_goal && ai->role == GM_BOT_DEFEND && (ai->goal_intent & GM_INTENT_GUARD);
     /* the guard goes after a dig heard near its post, through the ground if
        it must; then back to the post */
@@ -1271,7 +1300,11 @@ void _bot_think(server_t* server, player_t* bot, bot_ai_t* ai)
     t->mate_dx = t->gx - bot->movement.position.x, t->mate_dy = t->gy - bot->movement.position.y;
     t->mate_d  = sqrtf(t->mate_dx * t->mate_dx + t->mate_dy * t->mate_dy);
     t->guarding = ai->role == GM_BOT_COVER && (ai->goal_intent & GM_INTENT_COVER);
-    if (t->target == NULL || t->rush || (t->guarding && t->mate_d > BOT_COVER_LOST) ||
+    /* a builder of a structure keeps at it while no enemy is on top of it
+       and it is not being shot at: the fort goes up while its team fights */
+    uint8_t fort_build = bot_fort_builder(bot) && (t->target == NULL || t->hdist > BOT_FORT_FIGHT) &&
+                         t->now >= ai->alert_until;
+    if (t->target == NULL || t->rush || (t->guarding && t->mate_d > BOT_COVER_LOST) || fort_build ||
         (t->hdist > BOT_MAX_SHOT_RANGE && (ai->phase == BOT_PHASE_PATROL || t->hdist > BOT_MAX_SHOT_RANGE * 1.25f)))
     {
         _think_walk(server, bot, ai, t);

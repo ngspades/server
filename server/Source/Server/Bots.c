@@ -23,6 +23,7 @@
 #include <Server/BotsInternal.h>
 #include <Server/Profile.h>
 #include <Server/BotProjects.h>
+#include <Server/BotForts.h>
 #include <Server/Proto10/Bridge.h>
 #include <Server/Sky.h>
 #include <uthash/uthash.h>
@@ -572,6 +573,7 @@ void bots_update(server_t* server)
     _bots_autofill_trim(server);
     bots_lights(server);
     bot_projects_tick(server);
+    bot_forts_tick(server);
     static uint64_t sight_since;
     uint64_t        tnow = get_nanos();
     if (sight_since == 0) {
@@ -998,6 +1000,7 @@ void bots_init(server_t* server)
     LOG_INFO("Bots: difficulty %s (skill %.2f..%.2f, aim error x%.1f)", p->name, p->skill_min, p->skill_max,
              p->aim_error);
     bot_projects_init(server);
+    bot_forts_init(server);
 }
 
 uint8_t bot_difficulty(void)

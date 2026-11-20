@@ -39,4 +39,8 @@ uint8_t bot_project_step(server_t* server, player_t* bot, int goal_floor);
    project sends the partner to the landing and lets the owner resume. */
 uint8_t bot_project_goal(server_t* server, player_t* bot, float* x, float* y, int* floor);
 
+/* this bot is on a bridge project that is not built yet (a fort leaves it
+   alone: one shared job at a time) */
+uint8_t bot_project_busy(uint8_t id);
+
 #endif
