@@ -19,8 +19,23 @@
 #include <uthash/utlist.h>
 #include <Util/Alloc.h>
 #include <Server/Proto10/Entities.h>
+#include <Server/Proto10/Bridge.h>
 #include <Server/Proto10/Mount.h>
 #include <math.h>
+
+/* A throw the server will not make says so: the log gets the reason and a
+   1.0 client gets "grenade-refused <why>", because it has already shown the
+   grenade and spent it (it explodes in front of the thrower and hurts
+   nobody, which read as a grenade that deals no damage). A 0.75 client keeps
+   the silence its protocol has. */
+static void _throw_refused(server_t* server, player_t* player, const char* why)
+{
+    evt_log(player, "grenade", "action=refused why=%s", why);
+    if (!profile_is_075() && player->conn != NULL) {
+        const char* parts[] = {"grenade-refused", why};
+        proto10_bridge_generic(server, player, 2, parts);
+    }
+}
 
 /* A grenade leaves the hand. The client says where it starts and how fast it
    goes (blocks per 1/32 s on the 0.75 wire, the same numbers a 1.0
@@ -48,17 +63,24 @@ void game_player_throw_grenade(server_t* server,
     }
 
     if (player->sprinting) {
+        _throw_refused(server, player, "sprinting");
         return;
     }
 
     uint64_t timeNow = get_nanos();
-    if (!diff_is_older_then(timeNow, &player->timers.since_last_grenade_thrown, NANO_IN_MILLI * 500) ||
-        !diff_is_older_then_dont_update(timeNow, player->timers.since_possible_spade_nade, (long) NANO_IN_MILLI * 1000))
-    {
+    /* 450 ms for the client's 500: two throws a network delay bunched up
+       are no rapid fire (a browser's WebRTC did it) */
+    if (!diff_is_older_then(timeNow, &player->timers.since_last_grenade_thrown, NANO_IN_MILLI * 450)) {
+        _throw_refused(server, player, "rate");
+        return;
+    }
+    if (!diff_is_older_then_dont_update(timeNow, player->timers.since_possible_spade_nade, (long) NANO_IN_MILLI * 1000)) {
+        _throw_refused(server, player, "spade_nade");
         return;
     }
 
     if (player->grenades > 0 && !plugins_on_grenade(server, player)) {
+        _throw_refused(server, player, "plugin");
         return;
     }
     if (player->grenades > 0) {

@@ -220,6 +220,21 @@ int explosion_blast_retail(server_t*  server,
     return _explosion_blast(server, attacker, pos, crater, 1.0f, self_scale, kill_reason, cause, peak, radius);
 }
 
+/* every player a blast could reach (within 16 blocks on each axis) and what
+   it did: the distance, whether the sight line from the body to the blast was
+   clear, and the damage. A blast that hurts nobody says why in the log */
+static void _grenade_blast_log(server_t* server, player_t* thrower, player_t* p, vector3f_t at, uint8_t value)
+{
+    vector3f_t pos = p->movement.position;
+    float      dx = fabsf(pos.x - at.x), dy = fabsf(pos.y - at.y), dz = fabsf(pos.z - at.z);
+    if (dx >= 16 || dy >= 16 || dz >= 16) {
+        return;
+    }
+    int see = physics_can_see(server, pos.x, pos.y, pos.z, at.x, at.y, at.z) ? 1 : 0;
+    evt_log(thrower, "grenade_blast", "victim=%s at=%.2f,%.2f,%.2f d=%.1f sight=%d damage=%d", p->name, at.x, at.y,
+            at.z, sqrtf(dx * dx + dy * dy + dz * dz), see, value);
+}
+
 void handle_grenade(server_t* server, player_t* player)
 {
     grenade_t* grenade;
@@ -253,6 +268,7 @@ void handle_grenade(server_t* server, player_t* player)
                 {
                     if (connected_player->state == STATE_READY) {
                         uint8_t value = get_grenade_damage(server, connected_player, grenade);
+                        _grenade_blast_log(server, player, connected_player, grenade->position, value);
                         if (value > 0) {
                             send_set_hp(server, player, connected_player, value, 1, 3, 5, 1, grenade->position);
                         }

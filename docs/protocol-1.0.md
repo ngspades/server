@@ -2453,6 +2453,7 @@ Holding the trigger spends nothing: a rocket is spent only by
 | Dir | Command | Meaning |
 | --- | --- | --- |
 | C→S | (no command) | **fire: the trigger**, ngspades' way: the press of PlayerInput's `toolPrimary` (a ClientSideEntityUpdate whose input has it and the previous one did not) with the rocket launcher in hand launches from the server's copy of the eye, a block ahead along its copy of the look. The client sends that update reliable at the moment it fires, and with the launcher in hand sets the bit only for a press it fired on (held until release), so the server never fires a press the client did not and the clips agree |
+| S→C | `grenade-refused <why>` | to the thrower: `sprinting`, `rate` (450 ms between two throws), `spade_nade` (a right click with the spade in the last second) or `plugin`. The throw was not made: the client takes back the grenade it showed and its count |
 | S→C | `rocket-refused <why>` | to the shooter: `weapon` (not a rocket launcher), `not_alive`, `tool` (the gun is not in hand), `reloading`, `empty`, `sprinting`, `rate` (0.8 s between two), `direction`, `origin_far`, `too_many`. The clip was not spent |
 | S→C | `rocket-push <vx> <vy> <vz>` | to the shooter of a rocket that went off within 4 blocks of its chest: add this to your velocity (the 0.75 physics' units: a jump is vz -0.36). The server applied it to its own copy of the body |
 
