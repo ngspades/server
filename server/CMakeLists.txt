@@ -15,6 +15,10 @@ project(SpadesX LANGUAGES C CXX)
 # libcurl, OpenSSL, readline or Lua
 if(EMSCRIPTEN)
     include(cmake/web.cmake)
+elseif(SWITCH_HOST)
+    # the Nintendo Switch's local match: the same server as a static library
+    # the game links in and runs on a thread (client/switch/server.cmake)
+    include(cmake/switch.cmake)
 endif()
 
 # Before anything looks for a library. The release's server
@@ -83,7 +87,7 @@ find_package(Threads REQUIRED)
 
 # the browser's server (cmake/web.cmake, included above): none of the
 # network libraries below
-if(NOT EMSCRIPTEN)
+if(NOT SERVER_WEB_HOST)
 
 # WebRTC for the browsers (docs/web.md phase 2): libdatachannel, fetched and
 # built here, always. Every server takes browser players, so there is no
@@ -91,10 +95,15 @@ if(NOT EMSCRIPTEN)
 # and LTO below, which would apply to its C++ too. Offline builds (Flatpak)
 # point FETCHCONTENT_SOURCE_DIR_LIBDATACHANNEL at a checkout with submodules.
 include(cmake/libdatachannel.cmake)
-endif() # NOT EMSCRIPTEN
+endif() # NOT SERVER_WEB_HOST
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+# not on the Switch: its libraries are renamed object by object before they
+# are linked into the game (client/switch/prefix_libs.sh), which LTO's
+# bytecode objects do not allow
+if(NOT SERVER_SWITCH_HOST)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
 option(CMAKE_UNITY_BUILD "Enable Unity Build" ON)
 
 option(GIT_SUBMODULES_FETCH "Fetch the required Git submodules" ON)
@@ -105,17 +114,17 @@ add_subdirectory(Extern)
 # Locate json-c (macOS/Homebrew installs it outside the default search path;
 # the web build fetched its own, cmake/web.cmake)
 find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND AND NOT EMSCRIPTEN)
+if(PkgConfig_FOUND AND NOT SERVER_WEB_HOST)
     pkg_check_modules(JSONC QUIET json-c)
 endif()
-if(JSONC_FOUND AND NOT EMSCRIPTEN)
+if(JSONC_FOUND AND NOT SERVER_WEB_HOST)
     include_directories(${JSONC_INCLUDE_DIRS})
     link_directories(${JSONC_LIBRARY_DIRS})
 endif()
 
 # Lua for game modes as scripts (Gamemodes/LuaMode.c): optional, a server
 # built without it simply finds no script mode (the web build has none yet)
-if(PkgConfig_FOUND AND NOT EMSCRIPTEN)
+if(PkgConfig_FOUND AND NOT SERVER_WEB_HOST)
     pkg_check_modules(LUA QUIET lua5.4)
     if(NOT LUA_FOUND)
         pkg_check_modules(LUA QUIET lua-5.4)
@@ -133,7 +142,7 @@ endif()
 # libcurl: the master server's calls (Net/Master.c, required: every server
 # lists itself and answers browsers) and the plugins' game.http, both on
 # PluginNet.c's threads
-if(EMSCRIPTEN)
+if(SERVER_WEB_HOST)
     # the worker calls out to nothing: no master, no map downloads
     set(CURL_LIBRARIES "")
     set(SERVER_READLINE_LIBS "")
@@ -173,9 +182,21 @@ if(SERVER_STATIC AND LUA_FOUND)
 endif()
 
 # Add main target
+if(NOT DEFINED SERVER_STACK_PROTECTOR)
+    set(SERVER_STACK_PROTECTOR -fstack-protector-strong)
+endif()
 add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wno-error=unused-but-set-parameter -Wno-error=pedantic
-                    $<$<COMPILE_LANGUAGE:C>:-std=gnu11> -fstack-protector-strong)
-add_executable(SpadesX "")
+                    $<$<COMPILE_LANGUAGE:C>:-std=gnu11> ${SERVER_STACK_PROTECTOR})
+if(SERVER_SWITCH_HOST)
+    # devkitPro's GCC 15 warns (maybe-uninitialized, format-truncation) where
+    # the native toolchains' do not: the release's -Werror gates the desktop
+    # builds, and a console build only has to run
+    add_compile_options(-Wno-error)
+    # linked into the game, whose own main it is not (Main.c: sd_server_main)
+    add_library(SpadesX STATIC "")
+else()
+    add_executable(SpadesX "")
+endif()
 
 target_link_libraries(SpadesX
     PRIVATE
@@ -213,7 +234,9 @@ if(EMSCRIPTEN)
     set_target_properties(SpadesX PROPERTIES OUTPUT_NAME server SUFFIX ".js")
 endif()
 
+if(NOT SERVER_SWITCH_HOST)
 set_target_properties(SpadesX Util Server
   PROPERTIES
     INTERPROCEDURAL_OPTIMIZATION true
 )
+endif()

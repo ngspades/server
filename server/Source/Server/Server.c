@@ -86,7 +86,14 @@
 /* the browser's server (Net/Worker.c): no terminal, no readline, and the
    tick is the worker's main loop */
 #include <Server/Net/Worker.h>
+#ifdef SP_SWITCH_HOST
+/* the Switch's local match (client/switch/localhost.c): the server is a
+   thread of the game, so the tick is the native loop below and the game
+   is told when the server is up */
+extern void sd_host_server_started(void);
+#else
 #include <emscripten.h>
+#endif
 #else
 #include <readline/history.h>
 #include <readline/readline.h>
@@ -852,6 +859,21 @@ static uint64_t _tick_after(uint64_t tick_time)
     return 0;
 }
 
+/* the tick is a main loop of Emscripten's (the browser's worker); the
+   Switch's local server runs the native loop on a thread of its own */
+#if defined(SP_WEB_HOST) && !defined(SP_SWITCH_HOST)
+#define SP_WEB_LOOP 1
+#endif
+
+#ifdef SP_SWITCH_HOST
+/* the game stops its local server (client/switch/localhost.c): the loop
+   ends at the next tick and the server shuts down as it does on /shutdown */
+void sd_server_request_stop(void)
+{
+    server.running = 0;
+}
+#endif
+
 static void _server_shutdown(void)
 {
     // Server is shutting down, kick all players
@@ -889,7 +911,7 @@ static void _server_shutdown(void)
 #endif
 }
 
-#ifdef SP_WEB_HOST
+#ifdef SP_WEB_LOOP
 /* how often the worker's loop looks whether a tick is due: a timer of the
    worker (no animation frames there), a few times a tick so the 60 Hz
    schedule keeps its time */
@@ -997,6 +1019,9 @@ void server_start(server_args args, int startup_bots)
 
     if (server.running) {
         LOG_STATUS("Server started");
+#ifdef SP_SWITCH_HOST
+        sd_host_server_started();
+#endif
     }
 
 #ifndef SP_WEB_HOST
@@ -1015,7 +1040,7 @@ void server_start(server_args args, int startup_bots)
 
     ticks.tick_stats_at = get_real_nanos();
     ticks.next_tick     = get_real_nanos();
-#ifdef SP_WEB_HOST
+#ifdef SP_WEB_LOOP
     /* the worker's own loop calls the tick (_web_frame) and server_start
        never returns, as the native loop never did until the shutdown */
     emscripten_set_main_loop(_web_frame, WEB_FRAME_RATE, 1);
