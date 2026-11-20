@@ -259,7 +259,7 @@ set(SERVER_SOURCES
 # out or reads a terminal is left out, Net/WebHostStubs.c answers for it as
 # a server with it turned off, and Net/Worker.c is its one transport (the
 # page's MessageChannel)
-if(EMSCRIPTEN)
+if(SERVER_WEB_HOST)
     list(REMOVE_ITEM SERVER_SOURCES
         Net/EnetConn.c
         Net/WebRtc.c

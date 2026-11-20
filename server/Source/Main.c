@@ -334,6 +334,11 @@ static void _write_default_config(void)
     LOG_INFO("No %s here: wrote the default one (change its passwords and name)", path);
 }
 
+#ifdef SP_SWITCH_HOST
+/* the Switch's local match links the server into the game (the game's own
+   main is another): the game starts this on a thread */
+#define main sd_server_main
+#endif
 int main(int argc, char** argv)
 {
     for (int i = 1; i < argc; i++) {
