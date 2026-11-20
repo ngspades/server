@@ -21,6 +21,36 @@ hill, territory control, zombies, arena, Babel, creative...), Lua plugins and ga
 WebRTC, a master server list, and a remote console for
 administering a server from a tool such as sadctl.
 
+## Compared with the other servers
+
+Two community servers keep Ace of Spades alive and this one builds on their
+work: [SpadesX](https://github.com/SpadesX/SpadesX) (the code ours started
+from) and [piqueserver](https://github.com/piqueserver/piqueserver) (the
+widest-used 0.75 server). This is what differs, read from their repositories
+(SpadesX at its January 2026 commit, piqueserver at its September 2026
+one); it compares features, not people, and the other projects are alive, so
+their lists change.
+
+| | ngspades-server | SpadesX | piqueserver |
+| --- | --- | --- | --- |
+| **Language** | C | C | Python, with Cython for the hot parts |
+| **Licence** | GPL-3.0-or-later | GPL-3.0 | GPL-3.0 |
+| **Protocols** | 1.0 (the default) and the classic 0.75 with the community's extensions (`--profile 075`) | 0.75 | 0.75 |
+| **Game modes** | capture the flag (two flavours), team deathmatch, king of the hill, territory control, zombies, arena, Babel, creative | capture the flag, Babel | capture the flag (and one flag), territory control, team deathmatch, free for all, arena, Babel, push, tug of war, infiltration |
+| **Your own modes and scripts** | Lua plugins and Lua game modes | none: change the C | Python scripts (about 50 come with it) and map scripts |
+| **Bot players** | server-side bots with difficulty levels, objectives and roles ([docs/bots.md](docs/bots.md)) | no | no |
+| **Browsers** | WebRTC, next to the UDP players | no | no |
+| **Remote administration** | a remote console for tools ([docs/rcon.md](docs/rcon.md)), off until a long password is set | the server console and in-game commands | an SSH console, an IRC bot, a JSON status server |
+| **Maps** | up to 1024 x 1024; the maps of the rotation it lacks are downloaded from [ngspades/maps](https://github.com/ngspades/maps) | 512 x 512 | 512 x 512, with map metadata and extensions |
+| **Players** | up to 128 (protocol 1.0), 32 on 0.75 | 32 | 32 |
+| **Master list** | yes | yes | yes |
+| **Packaging** | one static binary per platform, Docker image from scratch | Docker | Python package, Docker |
+
+What the others have that this one does not: piqueserver's years of
+community scripts (airstrikes, rollback, vote kicks and many more) and its
+web status page; a big map or a script written for it will not run here as
+it is.
+
 ## Building
 
 You need CMake 3.16+, a C11 compiler and these libraries:
