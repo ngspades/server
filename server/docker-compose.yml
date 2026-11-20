@@ -3,7 +3,7 @@
 #   docker compose up -d                       the 1.0 server (this game's clients and browsers)
 #   docker compose --profile classic up -d     plus the classic 0.75 server (OpenSpades, BetterSpades...)
 #   docker compose logs -f                     what it says
-#   docker attach sad-server                   its console (detach with Ctrl+P, Ctrl+Q)
+#   docker attach ngspades-server                   its console (detach with Ctrl+P, Ctrl+Q)
 #
 # The first start writes Resources/config.toml (config-075.toml for the
 # classic one) in the volume and downloads the maps it names. Change the name
@@ -29,7 +29,7 @@ x-server: &server
 services:
   server:
     <<: *server
-    container_name: sad-server
+    container_name: ngspades-server
     ports:
       - "32887:32887/udp" # the game
     volumes:
@@ -38,7 +38,7 @@ services:
   classic:
     <<: *server
     profiles: ["classic"]
-    container_name: sad-server-075
+    container_name: ngspades-server-075
     environment:
       SP_PROFILE: "075"
     ports:
