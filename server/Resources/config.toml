@@ -343,6 +343,12 @@ difficulty = "normal"
 # false to keep the old one-bot bridges. Also SP_BOT_PROJECTS=0.
 cooperative_bridges = true
 
+# Bots raise fortifications together where the mode asks for them (king of
+# the hill's hill, territory control's territories): a battlemented ring, a
+# roofed bunker and a watchtower, up to four builders a structure. Set false
+# to keep every bot on its own walls. Also SP_BOT_FORTS=0.
+cooperative_forts = true
+
 # Browsers join over WebRTC (docs/web.md, docs/protocol-1.0.md "WebRTC
 # transport"): every browser player on this one UDP port (open it in the
 # firewall and forward it like the game's port). Default: the game's port

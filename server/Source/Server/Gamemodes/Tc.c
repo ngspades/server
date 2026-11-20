@@ -1,6 +1,7 @@
 // Copyright (c) 2026 ngspades contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <Server/Classes.h>
+#include <Server/BotForts.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Gamemode.h>
 #include <Server/Gamemodes/Tc.h>
@@ -66,6 +67,8 @@ static struct
     uint64_t       status_at;
     uint64_t       refill_at[256];
     uint16_t       captures[256]; /* territories each player helped take */
+    uint64_t       next_fort[TC_MAX_TERRITORIES];
+    uint64_t       next_bunker[TC_MAX_TERRITORIES];
     uint8_t        ended;
 } tc;
 
@@ -268,8 +271,72 @@ static void _tc_capture(server_t* server, int i, int team)
     uint8_t* score = server->protocol.gamemode.score;
     evt_log(NULL, "tc", "action=capture index=%d team=%d was=%d players=%d held=%u-%u", i, team, was, helpers,
             score[0], score[1]);
+    /* the territory changed hands: its fortification is the old owner's no
+       longer, and the new owner may raise one at once */
+    if (was == TEAM_A || was == TEAM_B) {
+        bot_fort_discard((uint8_t) was, t->x, t->y, 12);
+    }
+    tc.next_fort[i] = 0;
+    tc.next_bunker[i] = 0;
     if (score[team] >= tc.count) {
         _tc_end(server, "all");
+    }
+}
+
+/* the way the other team comes from, for the structures' facing */
+static void _tc_face_enemy(server_t* server, int team, int x, int y, int* fx, int* fy)
+{
+    float ex, ey;
+    _tc_spawn_middle(server, team == TEAM_A ? TEAM_B : TEAM_A, &ex, &ey);
+    float dx = ex - ((float) x + 0.5f), dy = ey - ((float) y + 0.5f);
+    if (fabsf(dx) >= fabsf(dy)) {
+        *fx = dx >= 0.0f ? 1 : -1;
+        *fy = 0;
+    } else {
+        *fx = 0;
+        *fy = dy >= 0.0f ? 1 : -1;
+    }
+}
+
+/* Three bots of one team in a territory start fortifying it: a ring around
+   it first (a battlemented wall to stand behind while it is taken), then,
+   once the team holds it and the ring is whole, a roofed bunker at its
+   middle. One structure of each kind a territory, a request every 10 s (the
+   request says no while one stands); the teams' counts decide who builds
+   it, so two teams crossing there do not both send builders at the same
+   cells. */
+static void _tc_forts(server_t* server, uint64_t now)
+{
+    for (int i = 0; i < tc.count; i++) {
+        tc_territory_t* t = &tc.t[i];
+        int             a = t->on[TEAM_A], b = t->on[TEAM_B];
+        int             present = a >= 3 && a > b ? TEAM_A : b >= 3 && b > a ? TEAM_B : -1;
+        int             holder = t->owner == TEAM_A || t->owner == TEAM_B ? t->owner : -1;
+        if (present < 0 && holder < 0) {
+            continue;
+        }
+        int fx, fy;
+        if (!bot_fort_exists(BOT_FORT_RING, t->x, t->y, 8)) {
+            if (present < 0 || now < tc.next_fort[i]) {
+                continue;
+            }
+            tc.next_fort[i] = now + 10ull * NANO_IN_SECOND;
+            _tc_face_enemy(server, present, t->x, t->y, &fx, &fy);
+            bot_fort_request(server, (uint8_t) present, BOT_FORT_RING, t->x, t->y, t->z, fx, fy);
+            continue;
+        }
+        /* the ring stands and the territory is held: the holder roofs the
+           middle (the builders are the holder's nearest bots) */
+        if (holder >= 0 && bot_fort_complete(BOT_FORT_RING, t->x, t->y, 8) &&
+            !bot_fort_exists(BOT_FORT_BUNKER, t->x, t->y, 8))
+        {
+            if (now < tc.next_bunker[i]) {
+                continue;
+            }
+            tc.next_bunker[i] = now + 10ull * NANO_IN_SECOND;
+            _tc_face_enemy(server, holder, t->x, t->y, &fx, &fy);
+            bot_fort_request(server, (uint8_t) holder, BOT_FORT_BUNKER, t->x, t->y, t->z, fx, fy);
+        }
     }
 }
 
@@ -323,6 +390,7 @@ static void _tc_tick(server_t* server)
             }
         }
     }
+    _tc_forts(server, now);
     /* every 30 s: each territory's holder, progress and players in it */
     if (now >= tc.status_at) {
         tc.status_at = now + 30ull * NANO_IN_SECOND;
@@ -561,9 +629,18 @@ static int _tc_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
         gm_goal_name(out, "tc-hold", 0);
     }
     const tc_territory_t* t = &tc.t[pick];
-    /* inside the capture cube, each bot at a place of its own round the cell */
-    float a    = (float) bot->id * 2.399963f;
-    float r    = 3.0f + (float) (bot->id % 4) * 2.0f;
+    /* inside the capture cube, each bot at a place of its own round the cell;
+       a whole bunker there gives every third bot the place inside it */
+    float a = (float) bot->id * 2.399963f;
+    float r = 3.0f + (float) (bot->id % 4) * 2.0f;
+    if (bot_fort_exists(BOT_FORT_RING, t->x, t->y, 8)) {
+        /* the ring's wall is at four cells: hold inside it or outside, never
+           on it (the walk to a spot on its wall read as stuck) */
+        r = bot->id % 3 == 0 ? 3.0f : 6.5f + (float) (bot->id % 3) * 1.5f;
+    }
+    if (bot->id % 3 == 0 && bot_fort_complete(BOT_FORT_BUNKER, t->x, t->y, 8)) {
+        r = 0.0f;
+    }
     out->x     = t->x + 0.5f + cosf(a) * r;
     out->y     = t->y + 0.5f + sinf(a) * r;
     out->z     = (float) t->z;

@@ -101,19 +101,22 @@ void _bot_defend_hold(server_t* server, player_t* bot, bot_ai_t* ai, float wx, f
                 cols[n][0] = -ax + 2 * side * px, cols[n][1] = -ay + 2 * side * py, cols[n][2] = 3, n++;
             }
         } else {
-            /* a castle wall (BattleSpades' fort_wall prefab, cut to a bot's
-               blocks): five wide in front and a block high (it shoots over
-               it standing), and a wing two high at each side. Two columns
-               side by side were no cover on an open hill. Merlons a block
-               over the front stood at the eye's height and held 40 of the 70
-               shots its own wall stopped; two high ends held half the rest.
-               A post's two holders (the CTF's forward posts) stand two
-               apart: their walls make one seven wide */
-            for (int k = -2; k <= 2; k++) {
-                cols[n][0] = ax + k * px, cols[n][1] = ay + k * py, cols[n][2] = 1, n++;
+            /* a castle front, from the idea of BattleSpades' fort_wall: seven
+               wide and one high through the middle (the bot shoots over it
+               standing), a three high tower at each end and a two high wing
+               behind each tower. Two columns side by side were no cover on an
+               open hill. Merlons a block over the front stood at the eye's
+               height and held 40 of the 70 shots its own wall stopped; the
+               ends two high held half the rest, so the height stays at the
+               ends and the firing lane stays one high. 15 cells, all within
+               a bot's four block reach from its post. A post's two holders
+               (the CTF's forward posts) stand two apart: their fronts make
+               one eleven wide */
+            for (int k = -3; k <= 3; k++) {
+                cols[n][0] = ax + k * px, cols[n][1] = ay + k * py, cols[n][2] = abs(k) == 3 ? 3 : 1, n++;
             }
             for (int side = -1; side <= 1; side += 2) {
-                cols[n][0] = 2 * side * px, cols[n][1] = 2 * side * py, cols[n][2] = 2, n++;
+                cols[n][0] = 3 * side * px, cols[n][1] = 3 * side * py, cols[n][2] = 2, n++;
             }
         }
         for (int row = 0; row < 3; row++) { /* the bottom row first: a block needs one under it */

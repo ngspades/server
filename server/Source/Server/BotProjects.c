@@ -87,6 +87,12 @@ static int _near_project(uint8_t team, int x, int y)
     return 0;
 }
 
+uint8_t bot_project_busy(uint8_t id)
+{
+    bot_project_t* p = _by_bot(id);
+    return p != NULL && !p->complete;
+}
+
 void bot_projects_reset(void)
 {
     memset(projects, 0, sizeof projects);

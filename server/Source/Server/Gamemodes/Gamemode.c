@@ -23,6 +23,7 @@
 #include <Server/Stats.h>
 #include <Server/MapVote.h>
 #include <Server/BotProjects.h>
+#include <Server/BotForts.h>
 #include <Server/Proto10/GameMode.h>
 #include <Server/Server.h>
 #include <Util/Enums.h>
@@ -170,6 +171,7 @@ void gamemode_init(server_t* server, uint8_t id)
     /* a map loaded any other way (/map) during a summary: no reset left */
     match_reset_at = 0;
     bot_projects_reset();
+    bot_forts_reset();
     /* the classes' figures from config.toml again (a plugin's last a map),
        then the plugins: a Lua mode is loaded after them, in its init */
     classes_map_start(server);
