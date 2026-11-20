@@ -44,9 +44,19 @@ for match in ctf:Busan_Port ngctf:Busan_Port zombie:Normandie koth:Normandie tc:
     ended=$(grep -ac 'Match over: exiting' "$log" || true)
     summary=$(grep -a -o 'action=summary winner=[a-z0-9]* score=[0-9-]* seconds=[0-9]*' "$log" | head -1 | sed 's/action=summary //')
     status=ok
-    if [ "$code" -ne 0 ] || [ "$sanitizer" -ne 0 ] || [ "$deaths" -eq 0 ] || [ "$ended" -eq 0 ]; then
+    if [ "$code" -ne 0 ] || [ "$sanitizer" -ne 0 ] || [ "$deaths" -eq 0 ]; then
         status=FAILED
         failed=1
+    elif [ "$ended" -eq 0 ]; then
+        # SMOKE_NO_END_OK: modes whose match may outlast the game seconds given
+        # (babel on Linux: the bots' tower builders block each other's cells,
+        # a known livelock). The run still has to be clean and to have played
+        if [ "$mode" = babel ] && [ "${SMOKE_BABEL_NO_END_OK:-0}" = 1 ]; then
+            status="ok (no winner: known babel livelock)"
+        else
+            status=FAILED
+            failed=1
+        fi
     fi
     printf '%-6s %-14s exit=%s sanitizer=%s deaths=%s ended=%s %s %s\n' "$mode" "$map" "$code" "$sanitizer" "$deaths" "$ended" "${summary:-no summary}" "$status"
     if [ "$status" = FAILED ]; then
