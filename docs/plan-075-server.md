@@ -795,7 +795,7 @@ refuses an address the master does not list), and the signalling (the offer
 and the answer) goes through our master. So the 0.75 profile announces to our
 master as well as to the public 0.75 masters (section 8.6).
 
-Our master is **our own code** (`../shootanddestroy-master`, a separate
+Our master is **our own code** (a separate, private
 repository, a Go program). Reading it settles what has to change there:
 
 - **The list's rows are already the 0.75 master's shape**
@@ -977,7 +977,7 @@ at every start**, not only when `--check-config` is asked for.
 | 9 | The ZeroSpades extensions on the server (ExtInfo, Player Properties, Damage Markers, Teamplay) | 2-3 days |
 | 10 | The web client speaking 0.75 | 1-2 days |
 | 11 | The tolerant preset, TURN, the master's WebRTC row | 1-2 days |
-| 12 | The master: the announce's protocol, the row's `game_version` and the identifier's prefix (`../shootanddestroy-master`, another repository), and the client's `ours` flag (the HELLOINFO decision) | 0.5-1 day |
+| 12 | The master: the announce's protocol, the row's `game_version` and the identifier's prefix (a separate, private repository), and the client's `ours` flag (the HELLOINFO decision) | 0.5-1 day |
 | 13 | The packaging, the CI, the docs | 1 day |
 
 Total: roughly **three weeks** of focused work, plus the operational work for
@@ -1030,7 +1030,7 @@ the public server (the page hosting, the master, the address).
 
 1. **The master's two hardcoded 1.0 bits** (`registry.go`: the row's
    `game_version` and the identifier's prefix) are ours to change — the master
-   is our own repository, `../shootanddestroy-master` — and section 10.2 says
+   is our own repository, a separate private one — and section 10.2 says
    exactly what to change. It is a separate repository, so it is a separate
    change (and a separate commit), not a file in this tree.
 2. **The gates' exact shape.** The features the 0.75 profile makes inert

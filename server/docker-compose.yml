@@ -33,7 +33,7 @@ services:
     ports:
       - "32887:32887/udp" # the game
     volumes:
-      - sad-data:/data
+      - ngspades-data:/data
 
   classic:
     <<: *server
@@ -44,8 +44,8 @@ services:
     ports:
       - "32897:32897/udp" # the game, 0.75
     volumes:
-      - sad-075-data:/data
+      - ngspades-075-data:/data
 
 volumes:
-  sad-data:
-  sad-075-data:
+  ngspades-data:
+  ngspades-075-data:
