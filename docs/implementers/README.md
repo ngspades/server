@@ -15,3 +15,8 @@ roadmaps into the full wire specification, [../protocol-1.0.md](../protocol-1.0.
 
 Start with [client-0.75.md](client-0.75.md) even for 1.0: it defines the
 coordinates, enumerations and game rules both protocols share.
+
+The public, implementer-facing version of these documents (self-contained,
+with C and Godot examples, the master list and the WebRTC signalling) is
+github.com/ngspades/protocol. Keep it in step with this folder when
+a protocol behaviour changes: it is what other people's agents read.
