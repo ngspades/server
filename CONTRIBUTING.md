@@ -106,7 +106,7 @@ shows its numbers (`run`) in the pull request.
 - A packet buffer one byte short wrote out of bounds: check `sizeof` against
   what you write.
 - The tick spun on `sleep(0)` and starved every other thread; it paces at 60
-  Hz. ENet is driven from the tick's thread only: work from other threads is
+  Hz. enet6 is driven from the tick's thread only: work from other threads is
   queued.
 - A death applied only when a client received it left bots alive at 0 hp:
   the game state never depends on who is listening.

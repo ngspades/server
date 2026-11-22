@@ -23,7 +23,7 @@ for the coordinate system and game rules both protocols share.
 
 | Setting | Value |
 | --- | --- |
-| Transport | ENet 1.3 over UDP, IPv4 and IPv6; WebRTC DataChannels in a browser (§3.4) |
+| Transport | ENet 1.3 over UDP (the server uses enet6, wire-compatible; encryption off), IPv4 and IPv6; WebRTC DataChannels in a browser (§3.4) |
 | Port | 32887, the same as 0.75 |
 | Connect data | `0x08101919` |
 | Channels | 2. Channel 0 reliable for everything; channel 1 unreliable sequenced, for movement only (our server sends everything on channel 0 for now; read both) |

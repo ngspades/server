@@ -141,7 +141,7 @@ lists SpadesX's authors and the files that descend from theirs.
 arena and squad scripts), the OpenSpades `ngspades` branch (protocol 1.0's
 first design and the ngmap codec), [ZeroSpades](https://github.com/zerospades/zerospades)
 and the [aosprotocol](https://github.com/zerospades/aosprotocol) specification
-(the 0.75 extensions), [ENet](https://github.com/lsalzman/enet) with
-SirLynix's IPv6 layer, [libvxl](https://github.com/xtreme8000/libvxl),
+(the 0.75 extensions), [enet6](https://github.com/SirLynix/enet6) (SirLynix's fork of
+[ENet](https://github.com/lsalzman/enet), wire-compatible with ENet 1.3), [libvxl](https://github.com/xtreme8000/libvxl),
 [tomlc99](https://github.com/cktan/tomlc99), json-c and libdatachannel.
 The maps belong to their authors, credited in each map's files.
