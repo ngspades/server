@@ -591,6 +591,25 @@ int p10_decode_chat_broadcast(const uint8_t* data, size_t size, p10_chat_broadca
 #define P10_GM_KOTH_ON          "koth-on"
 #define P10_GM_KOTH_POINTS      "koth-points"
 #define P10_GM_KOTH_WINNER      "koth-winner"
+/* Plant the Bomb (mode "ptb"): its rounds use the arena-* keys above
+   (arena-winner team1 = the counter-terrorists), plus how the last round
+   ended (eliminated|bomb|defuse|time|draw, in the end state only), the
+   bomb (none|carried|dropped|planted|defused|exploded), its carrier's id
+   while carried, where it lies (x,y,z of its floor block) when dropped
+   (never planted: no key says where the planted bomb is, nor its site), the
+   fuse's whole seconds left and its length, who is defusing it, who is
+   planting it (-1 nobody: the
+   clients play the holds' sounds by these two), and each site (x,y,z,radius) */
+#define P10_GM_PTB_WHY          "ptb-why"
+#define P10_GM_PTB_BOMB         "ptb-bomb"
+#define P10_GM_PTB_CARRIER      "ptb-carrier"
+#define P10_GM_PTB_BOMB_AT      "ptb-bomb-at"
+#define P10_GM_PTB_BOMB_TIME    "ptb-bomb-time"
+#define P10_GM_PTB_BOMB_TOTAL   "ptb-bomb-total"
+#define P10_GM_PTB_DEFUSER      "ptb-defuser"
+#define P10_GM_PTB_PLANTER      "ptb-planter" /* who is planting it, -1 */
+#define P10_GM_PTB_SITE_A       "ptb-site-a"
+#define P10_GM_PTB_SITE_B       "ptb-site-b"
 
 /* team field of territory<N> and progress: same numbers as the player team */
 #define P10_GM_TEAM_NEUTRAL 255

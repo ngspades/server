@@ -969,6 +969,20 @@ Rocket jumps: 6 to 24 a match. Miners closing in the hidden way (2Fort,
 800 s, seeds 11 and 12): Miner 57/69 and 61/72 (0.84 against 0.54), 13 of
 18 pickups and 6 of 9 captures by Miners.
 
+## Plant the Bomb
+
+The terrorists' carrier walks to the round's site (the nearer to its spawn
+two rounds of three), and once inside it stops on its own spot and holds
+USE (the mode calls the same `_ptb_set_use` a client's `ptb-use` reaches),
+crouched by the mode for the hold. Two terrorists escort it, the others take
+the site ahead of it; when the carrier dies the nearest terrorist fetches
+the dropped bomb. After the plant they hold a ring round the bomb. The
+counter-terrorists hold the two sites by rank, one in four rotating to the
+other at 35 s. After a plant they do not know where the bomb is: each goes
+to its nearer site, then the other, until it is within hearing (90 blocks);
+the nearest that hears it defuses when no terrorist is within 18 blocks of
+the bomb or the fuse is short, the others retake the site in the open.
+
 ## Asking bots for something
 
 Everything above is the bots' core, and it does not know which mode it

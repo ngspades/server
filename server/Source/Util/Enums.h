@@ -90,6 +90,7 @@ typedef enum {
     GAME_MODE_CREATIVE = 7, /* building only (Creative.c) */
     GAME_MODE_TDM = 8,      /* team deathmatch (Tdm.c) */
     GAME_MODE_KOTH = 9,     /* king of the hill (Koth.c) */
+    GAME_MODE_PTB = 10,     /* plant the bomb (Ptb.c) */
 } gamemode_t;
 
 typedef enum {

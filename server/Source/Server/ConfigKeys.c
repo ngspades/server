@@ -191,6 +191,18 @@ static const ck_key_t ck_arena_keys[] = {
     CK_END,
 };
 
+/* Gamemodes/Ptb.c: Plant the Bomb's rounds (the map's [ptb] wins over these) */
+static const ck_key_t ck_ptb_keys[] = {
+    {"freeze_seconds", CK_10},
+    {"round_seconds", CK_10},
+    {"bomb_seconds", CK_10},
+    {"plant_seconds", CK_10},
+    {"defuse_seconds", CK_10},
+    {"rounds_to_win", CK_10},
+    {"halftime_round", CK_10},
+    CK_END,
+};
+
 /* Gamemodes/Squads.c */
 static const ck_key_t ck_squads_keys[] = {{"enabled", CK_ALL}, {"size", CK_ALL}, {"spawn", CK_ALL}, CK_END};
 
@@ -304,6 +316,7 @@ static const ck_table_t ck_top_subs[] = {
     {.name = "net", .keys = ck_net_keys},
     {.name = "zombie", .prof = CK_10, .keys = ck_zombie_keys},
     {.name = "arena", .prof = CK_10, .keys = ck_arena_keys},
+    {.name = "ptb", .prof = CK_10, .keys = ck_ptb_keys},
     {.name = "conduct", .keys = ck_conduct_keys},
     {.name = "anticheat", .keys = ck_anticheat_keys},
     {.name = "squads", .prof = CK_10, .keys = ck_squads_keys},
