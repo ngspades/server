@@ -15,6 +15,7 @@
 #include <Server/Gamemodes/Squads.h>
 #include <Server/MapMeta/MapMeta.h>
 #include <Server/Proto10/GameMode.h>
+#include <Server/Proto10/World.h>
 #include <uthash/uthash.h>
 #include <proto10/codec.h>
 #include <Server/Perks.h>
@@ -658,6 +659,12 @@ static void _babel_init(server_t* server)
     for (int x = 206; x <= 306; ++x) {
         for (int y = 240; y <= 272; ++y) {
             map_set_color(&server->s_map.map, x, y, 1, platformColor.raw);
+            /* a client gets the map's stored ngmap as it is (the maps
+               repository's Babel maps have no slab in them) plus the cells
+               changed since the load: without this call the slab existed
+               only on the server, the clients saw nothing and the bots
+               walked on air */
+            proto10_world_cell(server, x, y, 1, P10_WORLD_CAUSE_NONE);
         }
     }
     /* both intels on top of the tower. The highest point of the map, not 0:
