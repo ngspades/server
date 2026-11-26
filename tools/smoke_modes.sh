@@ -10,6 +10,7 @@
 #
 # usage: tools/smoke_modes.sh [server binary] [game seconds]
 #   default: server/build-asan/<binary> (make server-asan), 4000 game seconds
+#   (classic capture the flag gets half as long again)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -29,12 +30,18 @@ for match in ctf:Busan_Port ngctf:Busan_Port zombie:Normandie koth:Normandie tc:
              arena:Titanic_Arena babel:babelstairs tdm:Normandie; do
     mode=${match%%:*}
     map=${match#*:}
+    # classic capture the flag on Busan_Port (389 blocks between the bases) takes 4100
+    # to 5400 game seconds with the bots that flank in a half moon, raise forts and
+    # watch from towers (about 3500 before): it gets half as long again. The smoke
+    # test only asks that a match ends
+    limit=$seconds
+    [ "$mode" = ctf ] && limit=$((seconds * 3 / 2))
     log="$out/$mode.log"
     mkdir -p "$out/data-$mode" "$out/maps"
     set +e
     # no smoke server may reach the public list or the network
     ( cd "$root/server" && SP_MASTER=0 SP_MAP_DOWNLOAD=${SP_MAP_DOWNLOAD:-1} SP_EVENTLOG=1 SP_FAST=1 SP_BOTS_PLAY=1 \
-        SP_EXIT_AT_MATCH_END=1 SP_EXIT_AFTER="$seconds" SP_RAND_SEED=3 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 \
+        SP_EXIT_AT_MATCH_END=1 SP_EXIT_AFTER="$limit" SP_RAND_SEED=3 ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 \
         UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
         "$bin" --port "$port" --data "$out/data-$mode" --maps-dir "$out/maps" --gamemode "$mode" --map "$map" --bots 16 ) > "$log" 2>&1
     code=$?
