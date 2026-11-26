@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/banner.png" alt="NEXGEN SPADES server" width="100%"></p>
+
 # ngspades-server
 
 The game server of **ngspades**, a voxel shooter in the line of Ace of
