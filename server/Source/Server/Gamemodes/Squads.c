@@ -174,7 +174,34 @@ static uint8_t _pick_squad(server_t* server, player_t* player)
             best_n = n;
         }
     }
-    return best ? best : empty;
+    if (best != 0 || empty == 0 || player->is_bot) {
+        return best ? best : empty;
+    }
+    /* every squad with members is full (a team of bots fills its squads
+       before a human joins): a human in a fresh squad is a player alone,
+       the very thing squads are for avoiding. Take the place of a bot of
+       the squad that has one (its highest id: leaders are the lowest), and
+       the bot goes to the empty squad, where `_fill` finds it a place when
+       one opens */
+    for (uint8_t s = 1; s <= SQUADS_MAX; s++) {
+        if (s == empty || _members(server, player->team, s, player) < cfg.size) {
+            continue;
+        }
+        player_t *p, *tmp, *bot = NULL;
+        HASH_ITER(hh, server->players, p, tmp)
+        {
+            if (p != player && p->is_bot && _in_play(p) && p->team == player->team && p->squad_team == player->team &&
+                p->squad == s && (bot == NULL || p->id > bot->id))
+            {
+                bot = p;
+            }
+        }
+        if (bot != NULL) {
+            _set_squad(server, bot, empty, "make_room");
+            return s;
+        }
+    }
+    return empty;
 }
 
 /* a bot respawning in a squad smaller than another of its team with room
