@@ -150,6 +150,7 @@ cd server && docker compose up -d      # the server in a container (~16 MB, from
 
 | | |
 | --- | --- |
+| [The manual](https://ngspades.github.io/server/) | the user manual (install, configure, run, administer) and the complete Lua plugin reference, as HTML and PDF; the Typst sources are in [manual/](manual/) (`cd manual && make site`) |
 | [docs/protocol-1.0.md](docs/protocol-1.0.md) | protocol 1.0: the wire, every packet, the join, the entities |
 | [docs/implementers/](docs/implementers/) | writing a compatible client or server, for 0.75 and for 1.0 |
 | [docs/plan-075-server.md](docs/plan-075-server.md) | the 0.75 profile: what it speaks and what it leaves out |
