@@ -317,7 +317,9 @@ the water level are the same rules a player meets.
   camouflage.
 - `[bots] cooperative_forts = true` (default; `SP_BOT_FORTS=0` for tests).
   `EVT bot_fort action=create|assign|place|complete|damaged|expire|discard|
-  status|refused why=shape|water|protected|overlap|unreachable|no_builders`.
+  status|settle|drop_cell|overlook|overlook_none|refused why=shape|water|
+  protected|overlap|unreachable|no_builders|declined` (an expiry lists the
+  first cells left in the structure's frame, `missing=u/v/w`).
 - **Where:** king of the hill raises a tower at the hill's middle from three
   bots of the team on it together, then, with the hill **held**, a ring from
   four. The ring 0 bot moves onto the tower's top once it is complete
@@ -333,6 +335,79 @@ the water level are the same rules a player meets.
   territory control 2.7 structures a match, 2.3 complete, 14.3 captures
   (11.7 before) and no stuck bots. The benchmark runs took the same 0.05 to
   0.09 ms a tick (a match's structures are a few hundred cells).
+- **Watchtower** (34 cells on flat ground, more on a slope): a two by two
+  core six high and a parapet on the threat side, so a bot on its top
+  stands six blocks over the ground, its eye about eight. A stair of single
+  steps winds round two sides of the core from the front corner to the back
+  (the corner step stands on a support column, the others lean on the
+  core), so it needs no level run of seven columns. Six and not seven: the
+  server takes a block within five of the builder, so every core cell goes
+  up from the ground (a builder's own reach check was 3.8 from the cell's
+  corner and stopped one at a good stand for the fifth level); a seventh
+  level needed a builder on the half built stair, and seven of seventeen
+  towers were given up with only that level missing.
+- **Barricade** (40 cells, seven wide, two floors): a two-high ground wall
+  with a firing deck one level up behind it, merlons on the deck (the gaps
+  between them its loopholes), a step up to the deck at each end and cheeks
+  covering the deck's sides. The ground floor's bots shoot over the deck and
+  the wall, the deck's over everything: four to six bots hold one front.
+- **The site sees the objective.** A watchtower and a barricade the mode
+  asks for at an objective (`bot_fort_overlook`) go on the highest ground,
+  nearest the middle of a range round it, from which the eye of a bot on
+  the finished structure sees a body standing on the objective
+  (`physics_line_clear`, every cell). Only ground walkable from the
+  objective counts (dry columns joined by one-block steps): the highest
+  ground alone was a roof seven over the hill that no plan reached, and its
+  builders walked partial plans until it expired. An objective with little
+  walkable ground round it (a territory on a building) gets none
+  (`overlook_none why=island`). The hilltop search (`bot_fort_hilltop`)
+  keeps to the same walkable ground. A site whose plan is refused is not
+  offered again for 60 s.
+- **The watch.** A finished watchtower or barricade asked with its
+  objective (`bot_fort_request_watch`) is manned: its top (one post) or its
+  deck (two, either side of the middle merlon) goes to the nearest willing
+  bot of the team within 40 for 45 s, which looks at the objective and
+  fights from there like a bot perched on a roof (it does not leave the
+  height to take cover), then rests. `EVT bot_fort action=watch|on_post|
+  unwatch|post_fight`.
+- **Bots do not build all the time.** Asked to start a structure, a bot
+  builds only on a `[bots] build_chance` roll (35%); one that does not, and
+  any free bot within 40 of an unfinished structure of its team, joins on a
+  `help_chance` roll (70%), the same roll a watch takes. A roll holds 20 s
+  (the slots are filled every tick: a roll a tick was a yes within a
+  second). A builder that put its share (24 cells, while a mate is on it),
+  or whose structure was finished or given up, and a watch that ended, rest:
+  they fight `build_cooldown` (60) seconds before they are asked again. A
+  carrier is never asked. `EVT bot_fort action=rules|decide why=start|help|
+  watch|rest why=complete|share|watch|expire|settle|discard`, `refused
+  why=declined asked=`. `SP_BOT_BUILD_CHANCE`, `SP_BOT_HELP_CHANCE`,
+  `SP_BOT_BUILD_COOLDOWN`.
+- **Kept and finished.** A team's bots never spade a cell of one of its
+  structures (`bot_fort_cell_kept`, in `bots_team_built`): mates walking
+  through dug the stair's first step once its 30 s had passed, and the tower
+  above it could not be climbed. A cell whose claim ran out three times with
+  its builder beside it leaves the plan (`drop_cell`; never a watchtower's
+  top), and a structure nine tenths up when it expires is kept as it stands
+  (`settle`) instead of being forgotten.
+- **Where, after this change:** the CTFs raise at their intel a bunker, a
+  watchtower 10 to 36 blocks off that sees it, a barricade 6 to 22 off, then
+  the ring; a squad's lane waypoint gets a barricade on the nearest walkable
+  hilltop (it got a bunker). King of the hill adds a watchtower 6 to 26 from
+  the hill (inside the ring it counts as on the hill) and, held by four, a
+  barricade 6 to 16 off facing the enemy. Territory control adds a
+  watchtower 6 to 28 from a territory a team is in, and the holder's
+  barricade 5 to 14 off. Each searches once every 15 s a team or territory.
+- Measured, 16 bots, 500 s, three seeds, the build before against after
+  (Busan_Port: koth, tc, ngctf; Normandie: ctf, koth): watchtowers 19
+  created, 7 complete and 4 kept at nine tenths, the rest given up at the
+  start (one builder pulled into fights); barricades 21 created, 20 finished;
+  watches 76, 31 on their post. Structures started: koth 4.7 to 7.7, tc 6.3
+  to 9.7, ctf 17 to 8, ngctf 17.7 to 5 (the chance), cells put about the
+  same or more where the forts are new. Partial plans halved (koth Busan_Port
+  1017 to 486, ngctf 471 to 243: no more builders walking at roofs), stuck
+  bots 9.7 to 0 on ngctf. Kills koth 89 to 112 and 88 to 142, ngctf 70 to
+  110 with pickups 8.3 to 14 and captures 1.7 to 4.3, ctf and tc within the
+  spread. The tick the same or lower; no crash, the 0.75 profile too.
 - **Licence:** the same as the bridges. BattleSpades is AGPL-3.0; this is
   our own implementation of the idea, no cell list and no code taken from it.
 

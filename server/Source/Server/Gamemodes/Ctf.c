@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <tomlc99/toml.h>
 #include <Server/Bots.h>
+#include <Server/BotForts.h>
 #include <Server/Classes.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Ctf.h>
@@ -1326,12 +1327,93 @@ static player_t* _ctf_tunnel_mate(server_t* server, player_t* bot)
     return best;
 }
 
+/* Fortifications for the classic and next gen CTF (the shapes are
+   BotForts.c's, raised by the team's bots that take the chance): at its own
+   intel a bunker, a tall watchtower and a two floor barricade on high ground
+   that sees the intel, then a ring once the bunker stands; and on the hill
+   nearest each squad's lane waypoint, where the squad stops, a barricade to
+   hold the flank. A request is asked every 15 s and the structures say no
+   while one stands there. */
+static uint64_t ctf_next_fort[2];
+
+static void _ctf_face(vector3f_t from, vector3f_t to, int* fx, int* fy)
+{
+    float dx = to.x - from.x, dy = to.y - from.y;
+    if (fabsf(dx) >= fabsf(dy)) {
+        *fx = dx >= 0.0f ? 1 : -1;
+        *fy = 0;
+    } else {
+        *fx = 0;
+        *fy = dy >= 0.0f ? 1 : -1;
+    }
+}
+
+static void _ctf_forts(server_t* server)
+{
+    if (server->protocol.current_gamemode == GAME_MODE_BABEL) {
+        return; /* the slab in the sky has its own builders */
+    }
+    uint64_t now = get_nanos();
+    for (int t = 0; t < 2; t++) {
+        if (now < ctf_next_fort[t]) {
+            continue;
+        }
+        ctf_next_fort[t] = now + 15ull * NANO_IN_SECOND;
+        uint8_t    team  = t == 0 ? TEAM_A : TEAM_B;
+        vector3f_t home  = server->protocol.gamemode.intel[t];
+        vector3f_t enemy = server->protocol.gamemode.intel[1 - t];
+        int        fx, fy, hx, hy, hz;
+        _ctf_face(home, enemy, &fx, &fy);
+        int ix = (int) home.x, iy = (int) home.y;
+        int iz = ix >= 0 && iy >= 0 ? map_top(&server->s_map.map, (uint16_t) ix, (uint16_t) iy) : 0;
+        if (bot_fort_hilltop(server, ix, iy, 24, 0, &hx, &hy, &hz)) {
+            bot_fort_request(server, team, BOT_FORT_BUNKER, hx, hy, hz, fx, fy);
+        } else if (!bot_fort_exists(BOT_FORT_BUNKER, ix, iy, 8)) {
+            bot_fort_request(server, team, BOT_FORT_BUNKER, ix, iy, iz, fx, fy);
+        }
+        /* a tall watchtower that sees the intel from the high ground round
+           it (the short tower on the nearest hilltop often saw only the
+           hill's other side), and a two floor barricade facing the enemy
+           where its deck sees the intel too: the team watches both */
+        if (!bot_fort_exists(BOT_FORT_WATCHTOWER, ix, iy, 44) &&
+            bot_fort_overlook(server, team, BOT_FORT_WATCHTOWER, ix, iy, iz, 10, 36, fx, fy, &hx, &hy, &hz))
+        {
+            bot_fort_request_watch(server, team, BOT_FORT_WATCHTOWER, hx, hy, hz, fx, fy, ix, iy, iz);
+        }
+        if (!bot_fort_exists(BOT_FORT_BARRICADE, ix, iy, 28) &&
+            bot_fort_overlook(server, team, BOT_FORT_BARRICADE, ix, iy, iz, 6, 22, fx, fy, &hx, &hy, &hz))
+        {
+            bot_fort_request_watch(server, team, BOT_FORT_BARRICADE, hx, hy, hz, fx, fy, ix, iy, iz);
+        }
+        if (bot_fort_complete(BOT_FORT_BUNKER, ix, iy, 24)) {
+            bot_fort_request(server, team, BOT_FORT_RING, ix, iy, iz, fx, fy);
+        }
+    }
+}
+
+/* the squad stopped at a waypoint of its lane: a two floor barricade on the
+   nearest high ground, facing the enemy intel (the squad holds the flank
+   from two rows; the bunker held one) */
+static void _ctf_lane_fort(server_t* server, int t, vector3f_t w)
+{
+    int hx, hy, hz, fx, fy;
+    if (!bot_fort_hilltop(server, (int) w.x, (int) w.y, 22, 2, &hx, &hy, &hz)) {
+        return;
+    }
+    vector3f_t enemy = server->protocol.gamemode.intel[1 - t];
+    _ctf_face(w, enemy, &fx, &fy);
+    int ez = map_top(&server->s_map.map, (uint16_t) enemy.x, (uint16_t) enemy.y);
+    bot_fort_request_watch(server, t == 0 ? TEAM_A : TEAM_B, BOT_FORT_BARRICADE, hx, hy, hz, fx, fy, (int) enemy.x,
+                           (int) enemy.y, ez);
+}
+
 /* once a tick: bots with a post leave their squad, every squad keeps its
    leader (a new one only when it left), and how far along its lane it got */
 void _ctf_tick(server_t* server)
 {
     _ctf_seats_tick(server);
     squads_census(server);
+    _ctf_forts(server);
     uint8_t   best[2][SQUADS_MAX + 1], sneak[2][SQUADS_MAX + 1];
     player_t *p, *tmp;
     memset(best, 0xFF, sizeof(best));
@@ -1398,6 +1480,7 @@ void _ctf_tick(server_t* server)
             if (fabsf(leader->movement.position.x - w.x) < 8.0f && fabsf(leader->movement.position.y - w.y) < 8.0f) {
                 lanes[t][s].stage++;
                 evt_log(leader, "bot_lane", "action=waypoint squad=%d stage=%u", s, lanes[t][s].stage);
+                _ctf_lane_fort(server, t, w);
             }
         }
     }

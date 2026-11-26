@@ -343,11 +343,24 @@ difficulty = "normal"
 # false to keep the old one-bot bridges. Also SP_BOT_PROJECTS=0.
 cooperative_bridges = true
 
-# Bots raise fortifications together where the mode asks for them (king of
-# the hill's hill, territory control's territories): a battlemented ring, a
-# roofed bunker and a watchtower, up to four builders a structure. Set false
-# to keep every bot on its own walls. Also SP_BOT_FORTS=0.
+# Bots raise fortifications together where the mode asks for them (the
+# CTF's bases and lanes, king of the hill's hill, territory control's
+# territories): a battlemented ring, a roofed bunker, a short tower, a tall
+# watchtower on high ground that sees the objective and a two floor
+# barricade, up to four builders a structure. Set false to keep every bot on
+# its own walls. Also SP_BOT_FORTS=0.
 cooperative_forts = true
+
+# Bots do not build all the time: asked to start a structure, a bot builds
+# on a build_chance roll (percent); one that does not, and any bot near an
+# unfinished structure of its team, helps on a help_chance roll (the same
+# roll mans a finished watchtower's top or barricade's deck for 45 s). After
+# its share (24 cells at most) or its watch a bot fights build_cooldown
+# seconds before it is asked again. Also SP_BOT_BUILD_CHANCE,
+# SP_BOT_HELP_CHANCE and SP_BOT_BUILD_COOLDOWN.
+build_chance = 35
+help_chance = 70
+build_cooldown = 60
 
 # Browsers join over WebRTC (docs/web.md, docs/protocol-1.0.md "WebRTC
 # transport"): every browser player on this one UDP port (open it in the
