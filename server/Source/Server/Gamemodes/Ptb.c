@@ -5,12 +5,14 @@
  * The rounds borrow the arena's gates, spawn points and countdown leash
  * (Arena.c's arena_kit_*); everything about the bomb is here.
  */
+#include <physics/solid.h>
 #include <Server/Bots.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Arena.h>
 #include <Server/Gamemodes/Gamemode.h>
 #include <Server/Gamemodes/Ptb.h>
 #include <Server/Grenade.h>
+#include <modes/modes.h>
 #include <Server/MapStore.h>
 #include <Server/Player.h>
 #include <Server/Profile.h>
@@ -40,7 +42,7 @@
 #define PTB_T  TEAM_B /* team 2 carries the bomb */
 
 #define PTB_SITES_FILE "Resources/ptb_sites.toml"
-#define PTB_END_SECONDS 5
+#define PTB_END_SECONDS 7 /* CS:GO competitive mp_round_restart_delay */
 /* a terrorist this close to the dropped bomb (horizontally; and within a few
    blocks of its height) picks it up, as one walks over the intel */
 #define PTB_PICKUP_REACH 1.6f
@@ -163,6 +165,52 @@ static struct
 } ptb;
 
 static uint8_t ptb_bot_roll[SERVER_MAX_PLAYERS]; /* a bot's draw for its round's job */
+
+/* What the defenders' bots know after a plant, and only that: a site where a
+   defender stood and heard no beep (PTB_BOMB_HEAR) is clear, and they say so
+   to each other (team chat, as players do). The bomb's site itself is never
+   told. Reset at every plant and every round. */
+static uint8_t ptb_cleared[2];
+/* the site a searching bot last picked, to log a change of mind once */
+static int8_t ptb_search_site[SERVER_MAX_PLAYERS];
+/* One approach route a bot takes to a site, so a team that goes to the same
+   place does not walk it in single file: a staging point to one side of the
+   straight way, reached first. key names the target it was drawn for (the
+   site, or 10 + the bomb's site when retaking); a new target draws again. */
+typedef struct
+{
+    int8_t   key;
+    uint8_t  done;
+    uint8_t  route; /* 0 left, 1 right, 2 direct */
+    float    x, y;
+    uint64_t since;
+} ptb_stage_t;
+static ptb_stage_t ptb_stage[SERVER_MAX_PLAYERS];
+/* a defender's first arrival near the planted bomb, once a round */
+static uint8_t ptb_arrived[SERVER_MAX_PLAYERS];
+static uint8_t ptb_first_arrival;
+
+/* SP_PTB_CT_SPLIT=0 plays the defenders as before the cleared sites and the
+   split routes (the old nearer-site search, the planner's one way): the
+   benchmark's baseline, arrival logging stays on */
+static int _ptb_env_int(const char* name, int fallback, int lo, int hi);
+static int _ptb_split_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = _ptb_env_int("SP_PTB_CT_SPLIT", 1, 0, 1);
+    }
+    return on;
+}
+
+static void _ptb_defender_memory_reset(void)
+{
+    memset(ptb_cleared, 0, sizeof ptb_cleared);
+    memset(ptb_search_site, -1, sizeof ptb_search_site);
+    memset(ptb_stage, 0xFF, sizeof ptb_stage);
+    memset(ptb_arrived, 0, sizeof ptb_arrived);
+    ptb_first_arrival = 0;
+}
 
 static int _ptb_env_int(const char* name, int fallback, int lo, int hi)
 {
@@ -349,13 +397,13 @@ static int _ptb_sites_auto(server_t* server)
 static void _ptb_read_map(server_t* server, toml_table_t* map_toml)
 {
     arena_kit_read_map(server, map_toml);
-    ptb.freeze_seconds = 8;
+    ptb.freeze_seconds = 15; /* CS:GO competitive freeze time */
     ptb.round_seconds  = 115;
     ptb.bomb_seconds   = 40;
     ptb.plant_seconds  = 3.2f;
     ptb.defuse_seconds = 10.0f;
-    ptb.rounds_to_win  = 8;
-    ptb.halftime_round = -1; /* -1: rounds_to_win - 1 */
+    ptb.rounds_to_win  = 16; /* CS:GO MR15: 16 rounds win the match */
+    ptb.halftime_round = -1; /* -1: rounds_to_win - 1, round 15 of 30 */
     FILE* fp           = fopen(server_config_path(), "r");
     if (fp != NULL) {
         char          err[200];
@@ -377,7 +425,7 @@ static void _ptb_read_map(server_t* server, toml_table_t* map_toml)
     ptb.rounds_to_win  = _ptb_env_int("SP_PTB_ROUNDS_TO_WIN", ptb.rounds_to_win, 1, 30);
     ptb.halftime_round = _ptb_env_int("SP_PTB_HALFTIME_ROUND", ptb.halftime_round, 0, 59);
     /* Counter-Strike's halftime: half of the longest match (rounds_to_win
-       8 is 15 rounds at most: the sides swap after round 7) */
+       16 is 30 rounds at most: the sides swap after round 15) */
     if (ptb.halftime_round < 0) {
         ptb.halftime_round = ptb.rounds_to_win - 1;
     }
@@ -608,6 +656,7 @@ static void _ptb_give(server_t* server, player_t* p, const char* why)
 static void _ptb_plant(server_t* server, player_t* p, int site, vector3f_t base)
 {
     memset(ptb_told, 0, sizeof ptb_told);
+    _ptb_defender_memory_reset();
     ptb.bomb       = PTB_BOMB_PLANTED;
     ptb.carrier    = 255;
     ptb.bomb_at    = base;
@@ -876,6 +925,7 @@ static void _ptb_init(server_t* server)
 static void _ptb_start_freeze(server_t* server)
 {
     ptb.round++;
+    _ptb_defender_memory_reset();
     _ptb_bomb_forget(server, 0);
     _ptb_crater_restore(server);
     _ptb_set_state(PTB_FREEZE);
@@ -953,6 +1003,11 @@ static void _ptb_end_round(server_t* server, int winner, const char* why)
         gm->score[winner]++;
         ptb.match_over = gm->score[winner] >= gm->score_limit;
     }
+    /* CS:GO's MR15 has 30 rounds at most: with nobody at 16 after the last
+       one (15-15) the match is a draw (no overtime here) */
+    if (!ptb.match_over && ptb.round >= 2 * (ptb.rounds_to_win - 1)) {
+        ptb.match_over = 1;
+    }
     ptb.halftime = !ptb.match_over && !ptb.swapped && ptb.halftime_round > 0 && ptb.round == ptb.halftime_round;
     /* a bomb still ticking when the last counter-terrorist fell goes with
        the round: the next one starts clean */
@@ -1000,6 +1055,32 @@ static void _ptb_swap(server_t* server)
     evt_log(NULL, "ptb", "action=swap round=%d moved=%d score=%u-%u", ptb.round, moved, gm->score[0], gm->score[1]);
 }
 
+/* Measures where the defenders come in from: each one's first time within 25
+   blocks of the bomb is logged with the bearing's quarter (0 east, 1 south,
+   2 west, 3 north on the map) and the seconds since the plant. */
+static void _ptb_arrival_tick(server_t* server)
+{
+    player_t *p, *tmp;
+    HASH_ITER(hh, server->players, p, tmp)
+    {
+        if (p->team != PTB_CT || !_ptb_alive(p) || p->id >= SERVER_MAX_PLAYERS || ptb_arrived[p->id]) {
+            continue;
+        }
+        float dx = p->movement.position.x - ptb.bomb_at.x, dy = p->movement.position.y - ptb.bomb_at.y;
+        if (dx * dx + dy * dy > 25.0f * 25.0f) {
+            continue;
+        }
+        ptb_arrived[p->id] = 1;
+        int   sector = ((int) floorf((atan2f(dy, dx) + 0.78539816f) / 1.57079633f)) & 3;
+        float secs   = (float) (get_nanos() - ptb.planted_at) / (float) NANO_IN_SECOND;
+        evt_log(p, "ptb", "action=ct_arrive sector=%d secs=%.1f route=%d first=%d", sector, secs,
+                ptb_stage[p->id].key < 0 ? -1 : ptb_stage[p->id].route, !ptb_first_arrival);
+        ptb_first_arrival = 1;
+    }
+}
+
+static uint64_t ptb_overlap_at;
+
 static void _ptb_tick(server_t* server)
 {
     int       present[2] = {0, 0}, alive[2] = {0, 0}, humans = 0;
@@ -1014,6 +1095,30 @@ static void _ptb_tick(server_t* server)
         if (p->state == STATE_SPAWNING || (p->state == STATE_READY && p->alive)) {
             alive[p->team]++;
         }
+    }
+    /* how many pairs of living bodies stand inside each other, every 2 s of a
+       fight (the measure of the solid players rule) */
+    if (ptb.state == PTB_FIGHT && get_nanos() - ptb_overlap_at >= 2 * NANO_IN_SECOND) {
+        int       pairs = 0, living = 0;
+        player_t *a, *b, *t1;
+        ptb_overlap_at = get_nanos();
+        HASH_ITER(hh, server->players, a, t1)
+        {
+            if (!_ptb_in_team(a) || a->state != STATE_READY || !a->alive) {
+                continue;
+            }
+            living++;
+            for (b = a->hh.next; b != NULL; b = b->hh.next) {
+                float dx = a->movement.position.x - b->movement.position.x;
+                float dy = a->movement.position.y - b->movement.position.y;
+                if (_ptb_in_team(b) && b->state == STATE_READY && b->alive &&
+                    game_solid_height(a->movement.position.z, b->movement.position.z) &&
+                    dx * dx + dy * dy < GAME_SOLID_DIST * GAME_SOLID_DIST) {
+                    pairs++;
+                }
+            }
+        }
+        evt_log(NULL, "players_overlap", "pairs=%d living=%d", pairs, living);
     }
     int   go      = humans > 0 || bots_play_alone();
     int   both    = present[0] > 0 && present[1] > 0;
@@ -1090,6 +1195,7 @@ static void _ptb_tick(server_t* server)
             ptb.last_alive[1] = alive[1];
             if (ptb.bomb == PTB_BOMB_PLANTED) {
                 _ptb_hear_tick(server);
+                _ptb_arrival_tick(server);
                 float fuse = (float) (get_nanos() - ptb.planted_at) / (float) NANO_IN_SECOND;
                 if (fuse >= (float) ptb.bomb_seconds) {
                     _ptb_explode(server);
@@ -1170,9 +1276,15 @@ static int _ptb_cell_protected(server_t* server, int x, int y, int z)
 
 static unsigned _ptb_player_rules(server_t* server, player_t* player)
 {
-    (void) server;
     (void) player;
-    return GM_RULE_NO_BLOCK | GM_RULE_NO_DESTROY;
+    /* SP_SOLID_PLAYERS=0 plays the old walk-through rule, for a measurement */
+    static int solid = -1;
+    if (solid < 0) {
+        const char* v = getenv("SP_SOLID_PLAYERS");
+        solid         = v == NULL || strcmp(v, "0") != 0;
+    }
+    (void) server;
+    return GM_RULE_NO_BLOCK | GM_RULE_NO_DESTROY | (solid ? GM_RULE_SOLID_PLAYERS : 0);
 }
 
 static int _ptb_weapon_change_instant(server_t* server, player_t* player)
@@ -1334,6 +1446,61 @@ static int _ptb_rank_near(server_t* server, player_t* bot, float x, float y)
     return rank;
 }
 
+/* A defender heading for (tx, ty) from far off takes one of up to three
+   routes by its rank among the living defenders: a staging point 25 to 40
+   blocks out, swung about 66 degrees to the left or right of the line from
+   the target to where the bot stands, and the direct way for the third.
+   Two bots then come at a site from two sides, not in single file (the
+   planner alone gives every bot the same cheapest way). Returns 1 with the
+   goal set while the bot is still on its way to the staging point. */
+static int _ptb_route_goal(server_t* server, player_t* bot, int rank, int n, int key, float tx, float ty, const char* name,
+                           gm_bot_goal_t* out)
+{
+    if (!_ptb_split_on()) {
+        return 0;
+    }
+    ptb_stage_t* st = &ptb_stage[bot->id];
+    float        px = bot->movement.position.x, py = bot->movement.position.y;
+    float        d  = hypotf(px - tx, py - ty);
+    if (st->key != (int8_t) key) {
+        int routes  = n < 3 ? n : 3;
+        st->key     = (int8_t) key;
+        st->done    = 1;
+        st->route   = 2;
+        st->since   = get_nanos();
+        if (routes >= 2 && d >= 55.0f) {
+            int        r   = rank % routes;
+            float      rad = d * 0.5f < 25.0f ? 25.0f : (d * 0.5f > 40.0f ? 40.0f : d * 0.5f);
+            float      a   = atan2f(py - ty, px - tx) + (r == 0 ? -1.15f : 1.15f);
+            vector3f_t at;
+            if (r < 2 && arena_kit_land_near(server, bot, tx + cosf(a) * rad, ty + sinf(a) * rad, &at)) {
+                st->route = (uint8_t) r;
+                st->x     = at.x;
+                st->y     = at.y;
+                st->done  = 0;
+            }
+        }
+        evt_log(bot, "ptb", "action=ct_route route=%d of=%d site=%s dist=%.0f", st->route, n < 3 ? n : 3, name, d);
+    }
+    if (!st->done) {
+        float sd = hypotf(px - st->x, py - st->y);
+        if (sd < 10.0f || d < 30.0f || get_nanos() - st->since > 30ULL * NANO_IN_SECOND) {
+            st->done = 1;
+        }
+    }
+    if (st->done) {
+        return 0;
+    }
+    gm_goal_name(out, "ptb-approach", GM_INTENT_PUSH);
+    out->x         = st->x;
+    out->y         = st->y;
+    out->hold      = 2.0f;
+    out->role      = GM_BOT_ATTACK;
+    out->walk_only = 1;
+    _ptb_set_use(server, bot, 0);
+    return 1;
+}
+
 static int _ptb_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
 {
     if ((bot->team != TEAM_A && bot->team != TEAM_B) || !bot->is_bot || bot->id >= SERVER_MAX_PLAYERS ||
@@ -1434,18 +1601,60 @@ static int _ptb_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
                goes to its site and listens, as a player would; one that
                hears it (PTB_BOMB_HEAR) goes for it */
             if (_ptb_bomb_dist(bot) > PTB_BOMB_HEAR) {
-                /* the nearer site first; there and still nothing heard, the
-                   other one */
+                /* the nearest site not yet cleared: a defender that stood on
+                   a site and heard nothing has cleared it for the team, so
+                   it never walks back to one just left (the old "nearer
+                   site, the other when on it" turned round at the edge) */
                 int k = 0;
-                if (ptb.site_count > 1) {
+                if (ptb.site_count > 1 && !_ptb_split_on()) {
                     float d0 = hypotf(bot->movement.position.x - ptb.sites[0].x, bot->movement.position.y - ptb.sites[0].y);
                     float d1 = hypotf(bot->movement.position.x - ptb.sites[1].x, bot->movement.position.y - ptb.sites[1].y);
                     k        = d1 < d0 ? 1 : 0;
                     if ((k ? d1 : d0) < ptb.sites[k].radius + 4.0f) {
                         k = 1 - k;
                     }
+                } else if (ptb.site_count > 1) {
+                    int clear_now = -1;
+                    for (int i = 0; i < ptb.site_count; i++) {
+                        float sd = hypotf(bot->movement.position.x - ptb.sites[i].x,
+                                          bot->movement.position.y - ptb.sites[i].y);
+                        if (sd < ptb.sites[i].radius + 4.0f) {
+                            ptb_cleared[i] = 1;
+                            clear_now      = i;
+                        }
+                    }
+                    if (ptb_cleared[0] && ptb_cleared[1]) {
+                        /* the bomb is on neither list's site: listen again */
+                        ptb_cleared[0] = ptb_cleared[1] = 0;
+                        if (clear_now >= 0) {
+                            ptb_cleared[clear_now] = 1;
+                        }
+                    }
+                    float best = 1e30f;
+                    for (int i = 0; i < ptb.site_count; i++) {
+                        float sd = hypotf(bot->movement.position.x - ptb.sites[i].x,
+                                          bot->movement.position.y - ptb.sites[i].y);
+                        if (!ptb_cleared[i] && sd < best) {
+                            best = sd;
+                            k    = i;
+                        }
+                    }
+                    if (ptb_search_site[bot->id] != k) {
+                        int from = hypotf(bot->movement.position.x - ptb.sites[0].x,
+                                          bot->movement.position.y - ptb.sites[0].y) <
+                                           hypotf(bot->movement.position.x - ptb.sites[1].x,
+                                                  bot->movement.position.y - ptb.sites[1].y)
+                                       ? 0
+                                       : 1;
+                        ptb_search_site[bot->id] = (int8_t) k;
+                        evt_log(bot, "ptb", "action=ct_rotate from=%s to=%s cleared=%d%d", ptb.sites[from].name,
+                                ptb.sites[k].name, ptb_cleared[0], ptb_cleared[1]);
+                    }
                 }
                 const ptb_site_t* site = &ptb.sites[k];
+                if (_ptb_route_goal(server, bot, rank, n, k, site->x, site->y, site->name, out)) {
+                    return 1;
+                }
                 gm_goal_name(out, "ptb-search", GM_INTENT_PUSH);
                 _ptb_ring_spot(server, bot, site->x, site->y, site->radius * 0.5f, rank, n, out);
                 out->hold      = 2.0f;
@@ -1469,7 +1678,13 @@ static int _ptb_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
                 float dx = bot->movement.position.x - ptb.bomb_at.x, dy = bot->movement.position.y - ptb.bomb_at.y;
                 want_use  = dx * dx + dy * dy <= (PTB_DEFUSE_REACH - 0.4f) * (PTB_DEFUSE_REACH - 0.4f);
             } else {
-                /* the rest retake the site: the terrorists holding it */
+                /* the rest retake the site: the terrorists holding it, each
+                   by a route of its own while the bomb is still far */
+                if (_ptb_route_goal(server, bot, rank, n, 10 + ptb.bomb_site, ptb.bomb_at.x, ptb.bomb_at.y,
+                                    ptb.sites[ptb.bomb_site].name, out))
+                {
+                    return 1;
+                }
                 gm_goal_name(out, "ptb-retake", GM_INTENT_PUSH);
                 _ptb_ring_spot(server, bot, ptb.bomb_at.x, ptb.bomb_at.y, 4.0f, rank, n, out);
                 out->hold = 2.0f;
@@ -1534,6 +1749,7 @@ const gamemode_ops_t ptb_ops = {
 .name                  = "ptb",
 .wire_name             = "ptb",
 /* no squads (the owner's call: rounds of a few players each) */
+.team_max              = GAME_PTB_TEAM_MAX,
 .read_map              = _ptb_read_map,
 .init                  = _ptb_init,
 .tick                  = _ptb_tick,

@@ -55,6 +55,7 @@ void gm_keys_put(gm_keys_t* out, const char* key, const char* fmt, ...) __attrib
 #define GM_RULE_NO_DESTROY  0x100 /* nothing of the map may be dug, shot open or cratered (the arena) */
 #define GM_RULE_NO_LIGHT    0x200 /* carries no flashlight (a zombie) */
 #define GM_RULE_NIGHT_VISION 0x400 /* sees in the dark as by day (a zombie: its client draws night vision) */
+#define GM_RULE_SOLID_PLAYERS 0x800 /* living bodies cannot walk into each other (common/physics/solid.h; protocol 1.0 only) */
 
 /* the mechanics a mode adds to the 0.75 rules (gamemode_has). Classic CTF
    ("ctf") keeps the 0.75 game as it was and has none of them nor perks;
@@ -110,6 +111,10 @@ typedef struct gamemode_ops
        clients and take their "squad" commands. 0 for a mode without squads
        and for the CTFs, which wire Squads.c's hooks into their ops themselves */
     uint8_t     squad_teams;
+    /* the most people (humans and bots) one team holds, 0: no limit
+       (Plant the Bomb: 5 v 5). Joins and team changes respect it
+       (gamemode_team_admit) and bot_create refuses past it */
+    uint8_t     team_max;
     /* NULL: config.toml's [perks]; else P10_PERK_COUNT rules of the mode's own */
     const gm_perk_rule_t* perk_rules;
     /* NULL: the default crates, where the classes play; else the mode's own */
@@ -243,6 +248,13 @@ const char* gamemode_cell_why(server_t* server, int x, int y, int z);
 uint8_t gamemode_grenade_can_destroy(server_t* server, vector3f_t pos);
 int     gamemode_has_perks(server_t* server);
 int     gamemode_has(server_t* server, unsigned feature);
+/* the mode's team limit (0: none) and whether a team has no room left */
+int     gamemode_team_max(server_t* server);
+int     gamemode_team_full(server_t* server, uint8_t team);
+/* a human wants into team (not counted there yet): 1 when there is room, or
+   when a bot of that team was removed to make it (people come before bots);
+   0 when the team is all people */
+int     gamemode_team_admit(server_t* server, uint8_t team);
 /* the host's choice for the classes (the zombie mode's): 1 when the mode has
    the option and it was applied, 0 when it has none */
 int     gamemode_set_classes(server_t* server, int on);

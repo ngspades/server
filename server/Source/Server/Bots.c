@@ -273,6 +273,11 @@ player_t* bot_create(server_t* server, uint8_t team)
     if (server->protocol.num_players >= server->protocol.max_players) {
         return NULL;
     }
+    /* a mode with a team limit (Plant the Bomb: 5 v 5): start-up counts,
+       the host's menu, autofill and the balanced add all stop here */
+    if (gamemode_team_full(server, team)) {
+        return NULL;
+    }
     uint8_t player_id = _find_free_id(server);
     if (player_id == 0xFF) {
         return NULL;

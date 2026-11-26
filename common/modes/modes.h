@@ -31,6 +31,10 @@
    20 where they are far apart (Raindance ~320 blocks, Busan_Port ~390) */
 #define GAME_MAP_BOTS_SMALL 10
 #define GAME_MAP_BOTS_LARGE 20
+/* Plant the Bomb is Counter-Strike's 5 v 5: no team holds more than this
+   many people, humans and bots together (the server refuses more, the
+   client's bot counts stop here) */
+#define GAME_PTB_TEAM_MAX 5
 /* the next gen CTF plays only maps whose two spawn areas are at least this
    far apart (the server's map_fits): its classes need the room */
 #define GAME_NGCTF_MIN_BASES 200.0f
@@ -170,7 +174,7 @@ static inline const struct game_mode_info* game_mode_get(int k) {
 		 N_("Plant the Bomb"),
 		 10,
 		 {"De_Dust2_342", "de_cache", "de_mirage", "de_inferno", "de_train", NULL},
-		 {GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, 0},
+		 {GAME_PTB_TEAM_MAX, GAME_PTB_TEAM_MAX, GAME_PTB_TEAM_MAX, GAME_PTB_TEAM_MAX, GAME_PTB_TEAM_MAX, 0},
 		 0},
 		{"zombie",
 		 N_("Zombies"),
@@ -230,6 +234,11 @@ static inline const struct game_mode_info* game_mode_find(const char* name) {
 			return game_mode_get(k);
 	}
 	return NULL;
+}
+
+/* the most people a team holds in the mode, humans and bots (0: no limit) */
+static inline int game_mode_team_max(const struct game_mode_info* mode) {
+	return mode && !strcmp(mode->name, "ptb") ? GAME_PTB_TEAM_MAX : 0;
 }
 
 #endif

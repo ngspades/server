@@ -7,6 +7,7 @@
 #include <Server/Proto10/Mount.h>
 #include <Server/Server.h>
 #include <Util/Log.h>
+#include <Util/Notice.h>
 
 /* A team change: out of the old team (the intel is dropped while player->team
    is still the old one), then into the new one, and a death or a spawn. The
@@ -38,6 +39,14 @@ void game_player_change_team(server_t* server, player_t* player, uint8_t team)
     }
 
     if (!plugins_on_team(server, player, team)) {
+        return;
+    }
+
+    /* a team at the mode's limit (5 v 5) takes a person in place of a bot,
+       else refuses */
+    if ((team == TEAM_A || team == TEAM_B) && !gamemode_team_admit(server, team)) {
+        evt_log(player, "team", "refused why=full requested=%u max=%d", (unsigned) team, gamemode_team_max(server));
+        send_server_notice(player, 0, "That team is full: %d players at most.", gamemode_team_max(server));
         return;
     }
 
