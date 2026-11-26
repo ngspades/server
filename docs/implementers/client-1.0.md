@@ -116,7 +116,7 @@ packets are kept for accounts later.
 ### 3.3 The map (§7)
 
 1. `GameStateHeader` is a `map` of properties: `map-name`, `map-size`
-   (`512,512,64`), `map-bytes`, and **`map-format`**: `vxl` or `ngmap`. Trust
+   (`x,y,z`: `512,512,64` or `1024,1024,64`, depth always 64), `map-bytes`, and **`map-format`**: `vxl` or `ngmap`. Trust
    that key, not what you asked for, because the server falls back to VXL when
    it cannot encode ngmap.
 2. Append every `MapData` fragment.

@@ -3,8 +3,9 @@
 What a client needs to join and play on an Ace of Spades 0.75 server, as
 implemented by ngspades-client (a BetterSpades fork).
 It is written for people building their own client. Where our client does
-something on purpose, or still gets something wrong, the text says so under
-**Our client**, with the file it lives in.
+something on purpose, the text says so under **Our client**, with the file it
+lives in. Our client is under conformance review: it is not a reference for
+edge cases, so section 8 lists what to check rather than what we do.
 
 The companion documents:
 
@@ -210,9 +211,8 @@ score, name, block color, position, orientation, movement and tool inputs.
 Only for yourself do you also track HP, blocks, grenades, magazine and
 reserve.
 
-**Our client**: `PLAYERS_MAX` is 256 (`player.h`). A name is kept in a 16-byte
-buffer, so a name with accents (2 bytes each in UTF-8) can lose its last
-characters.
+**Our client**: `PLAYERS_MAX` is 256 (`player.h`). Size the name buffer for
+UTF-8 (accents take 2 bytes each), or a long name loses its last characters.
 
 ### 3.2 Enumerations
 
@@ -233,8 +233,9 @@ characters.
 When a value is out of range, fall back to a safe one (spectator, rifle,
 spade) instead of indexing a table with it.
 
-**Our client** checks player ids (`player_id_ok`) and ignores a `SetTool`
-above 3, but does not normalize teams or weapons.
+**Check in yours**: validate player ids, ignore a `SetTool` above 3, and map an
+out-of-range team or weapon to a safe default (spectator, rifle) instead of
+using it as an index.
 
 ### 3.3 Block colors and the palette
 
@@ -247,9 +248,9 @@ wrap within the column. Picking a color sends `SetColor`.
 or the fog color when there is none.
 
 **Our client** (`texture_block_color`, `hud.c`) generates exactly the classic
-64 colors. Left and right wrap within the row; the classic behaviour also
-moves to the previous or next row. Its `E` only works while holding a block,
-darkens a damaged block's color, and can also copy another player's color.
+64 colors. Check how your palette steps at the row edges: the classic
+behaviour moves to the previous or next row. `E` picks the color under the
+crosshair while holding a block.
 
 ### 3.4 Fog
 
@@ -280,8 +281,9 @@ the creates, then the destroys. Servers rely on this to repaint a block (a
 destroy followed by a build at the same position), and a structure resting on
 that block must not collapse in between.
 
-**Our client** applies each packet at once and starts the physics check right
-away, so a repaint can make a structure fall.
+**Check in yours**: whether you apply edits per packet or per frame. Applying
+each packet at once starts the physics check early, so a repaint can make a
+structure fall.
 
 ---
 
@@ -357,9 +359,8 @@ Sizes include the id byte. Positions are in wire coordinates (section 2.1).
 Check every packet's length before reading it, and ignore ids you do not
 handle.
 
-**Our client** dispatches on the id (`network_update`) **without checking the
-length** first, so a short or malformed packet is read past its end. Fixing
-that is on our list.
+**Check in yours**: verify a packet's length against its id before decoding it,
+so a short or malformed packet is never read past its end.
 
 ### 0 PositionData
 
@@ -369,8 +370,7 @@ that is on our list.
 
 `vec3f ori`: turns you to that direction.
 
-**Our client** writes it into the position instead (`read_PacketOrientationData`),
-a bug inherited from BetterSpades.
+**Check in yours**: store it as the orientation, never as a position.
 
 ### 2 WorldUpdate
 
@@ -398,7 +398,7 @@ switches tools or reloads.
 effect. When `source` is not zero, also point the damage indicator at it.
 `type` is 0 for fall damage and 1 for anything else.
 
-**Our client** shows the hurt effect and plays the sound only when `type` is 1.
+**Check in yours**: which `type` values show the hurt effect and play the sound.
 
 ### 6 Grenade
 
@@ -447,8 +447,8 @@ The classic client places the player at `pos.z − 2` (two blocks higher).
 
 **Our client**:
 
-- It uses `pos` as given, without the −2.
-- A 16-byte packet overwrites the name with an empty one.
+- Check the −2 on `z` that this packet carries.
+- A 16-byte packet has no name: keep the one you have.
 - It prints "X joined the Y team" the first time a player appears.
 
 ### 13 BlockAction
@@ -470,7 +470,7 @@ the spade) and 5 give one back, up to 50.
 
 **Our client** (`read_PacketBlockAction`):
 
-- It handles types 0..3 and ignores 4 and 5.
+- Check that every block action type, 4 and 5 included, is handled.
 - It counts its own blocks when it sends an action, not when the server
   confirms it.
 
@@ -531,8 +531,8 @@ answers whether it has the map cached (`MapCached`, id 31, C→S).
 `uint8 index, int8 team, int8 rate, float progress`: TC captures and the
 capture bar.
 
-**Our client** reads an uninitialized pointer when a capture names a team
-other than 1 or 2 (`read_PacketTerritoryCapture`); to be fixed.
+**Check in yours**: a capture may name a team other than 0 or 1 (neutral): do
+not use the value as an index.
 
 ### 23 IntelCapture, 24 IntelPickup, 25 IntelDrop
 
@@ -545,8 +545,8 @@ the round.
 `uint8 player_id`: you get full HP, 50 blocks, 3 grenades and a full reserve.
 When you are dead, only play the sound.
 
-**Our client** restocks even while dead, and takes the counts from its class
-(`classes.c`).
+**Check in yours**: restock only a living player, and take the counts from the
+rules of the server's mode.
 
 ### 27 FogColor
 
@@ -630,30 +630,27 @@ to that extension, and as `HostStatus` otherwise.
 
 ---
 
-## 8. Known gaps in our client
+## 8. What a client implementer must check
 
-Collected from the sections above, in order of importance:
+This list is deliberately not a list of our client's faults: that changes with
+every release. It is what to verify in any 0.75 client, ours included. The
+ngspades-client conformance checklist, kept current, is at
+<https://ngspades.github.io/shoot-and-destroy/>.
 
-1. No length check before decoding a packet.
-2. `OrientationData` (1) is written into the position.
-3. A 16-byte `CreatePlayer` erases the name.
-4. `TerritoryCapture` with a team other than 1 or 2 reads an uninitialized
-   pointer.
-5. Without the `0xFF` prefix UTF-8 is still guessed from the bytes, and
-   non-CP437 characters go out as `?` to a server not known to read UTF-8.
-6. Block edits are not batched per frame.
-7. `BlockAction` types 4 and 5 are ignored.
-8. Disconnect reasons 0, 8, 9, 11 and 61 show as "Unknown".
-9. Smaller ones:
-   - unknown game modes are not treated as TC;
-   - out-of-range teams and weapons are not normalized;
-   - `SetHP` shows the hurt effect only for gun damage;
-   - `Restock` works while dead;
-   - the position and orientation thresholds (section 6);
-   - physics checks inside already empty areas;
-   - the block count is predicted locally;
-   - the palette row does not change at the edges;
-   - names are kept in 16 bytes;
-   - chat color `0x08` is not drawn;
-   - `CreatePlayer` ignores the −2 on `z`;
-   - `ExistingPlayer` does not park the player out of sight.
+- Length: every packet's size is checked against its id before decoding.
+- Orientation and position: `OrientationData` sets the orientation,
+  `PositionData` the position; the thresholds in section 6 decide when to send.
+- Values from the wire: teams, weapons, tools, game modes and territory teams
+  never index a table unchecked; an unknown mode is read as TC.
+- `CreatePlayer` and `ExistingPlayer`: the −2 on `z`, a short packet keeping
+  the name, and where a player that has no body yet is placed.
+- Block edits: batched per frame, action types 0..5 all handled, the palette
+  row stepping at the edges, the block count settled by the server.
+- Text: the `0xFF` UTF-8 prefix, names longer than 16 bytes, and the colour
+  bytes `0x01`-`0x08` (section 2.3).
+- Disconnect reasons: every code in section 1.2, 0, 8, 9, 11 and 61 included,
+  shown as a reason and never trusted as a number.
+- Position updates: sent at the rate the server expects (about 1 Hz when
+  idle), with the exact orientation.
+- Other: `SetHP` effects by damage type, `Restock` only while alive, physics
+  checks for cells that were already empty.

@@ -593,10 +593,10 @@ and 100–127 for our own extensions (section 12).
 
 ```
 client                                         server
-  | ENet connect (data = 0x08101919)  -------->   | NotInitiated (10 s)
+  | ENet connect (data = 0x08101919)  -------->   | NotInitiated (5 s)
   |                <------------------  Greeting |
   | InitiateConnection  ------------------------> | check protocol name
-  |                <---------  ServerCertificate | WaitingForCertificate (60 s)
+  |                <---------  ServerCertificate | WaitingForCertificate (10 s)
   | ClientCertificate  -------------------------> |
   |                <-----------  GameStateHeader | MapTransfer (300 s)
   |                <-----------  MapData × N     |
@@ -615,8 +615,11 @@ client has to `join` again.
 ### 5.3 Handshake timeouts [ref]
 
 Each pre-game state has a deadline, after which the server disconnects with
-`Timeout`: `NotInitiated` 10 s, `WaitingForCertificate` 60 s, the map transfer
-states 300 s. There is no timeout in `Game`, where ENet's own peer timeout
+`Timeout`: `NotInitiated` 5 s (`P10_TIMEOUT_INITIATE`), `WaitingForCertificate` 10 s
+(`P10_TIMEOUT_CERT`), the map transfer states 300 s (`P10_TIMEOUT_MAP`), and
+the wait for the client's `map-cached` answer 3 s (`P10_TIMEOUT_MAP_ANSWER`), all
+in `Proto10/Session.c`. The reference server waited 10 s and 60 s; ours is
+shorter because an unfinished handshake holds a player slot. There is no timeout in `Game`, where ENet's own peer timeout
 applies.
 
 ---
@@ -775,7 +778,7 @@ data arrives:
 | --- | --- | --- |
 | `map-name` | `Pinpoint` | |
 | `map-format` | `ngmap` or `vxl` | how to decode the `MapData` stream (7.5) |
-| `map-size` | `512,512,64` | width, height, depth |
+| `map-size` | `512,512,64` or `1024,1024,64` | `x,y,z` in the server's order: `x` and `y` are the two horizontal axes, `z` the 64 deep height (the server writes the map store's `size_x,size_y,size_z`). Our server sends 512 x 512 or 1024 x 1024 maps; our client accepts only those two square sizes with depth 64 and refuses anything else before decoding or caching |
 | `map-bytes` | `1834211` | total stream size, for a progress bar (optional) |
 | `map-crc32` | `3f2a91c7` | CRC32 (zlib's) of the exact `MapData` stream, 8 hex digits, and the client's cache key with `map-bytes` (optional: a server that sends none never gets an answer) |
 
@@ -2894,7 +2897,7 @@ void on_new_player_connection(server_t* server, ENetEvent* event)
     /* ... existing ban check and slot allocation, unchanged ... */
     player->protocol = protocol;
     if (protocol == PROTO_10)
-        proto10_session_begin(server, player); /* sends Greeting, arms the 10 s timeout */
+        proto10_session_begin(server, player); /* sends Greeting, arms the 5 s timeout */
     /* the 0.75 path continues exactly as today */
 }
 ```

@@ -50,8 +50,8 @@ A connection goes through these states, each with a deadline (§5.2, §5.3):
 
 | State | Waits for | Deadline |
 | --- | --- | --- |
-| not initiated | `InitiateConnection` | 10 s |
-| waiting for certificate | `ClientCertificate` | 60 s |
+| not initiated | `InitiateConnection` | 5 s (`P10_TIMEOUT_INITIATE`) |
+| waiting for certificate | `ClientCertificate` | 10 s (`P10_TIMEOUT_CERT`) |
 | map transfer, completing | `MapDataAcknowledge` | 300 s |
 | game | | ENet's own timeout |
 
