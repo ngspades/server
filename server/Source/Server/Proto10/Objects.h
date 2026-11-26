@@ -84,6 +84,10 @@ struct p10_object
     uint8_t    has_rotation;        /* rotation sent as is (the helicopter's roll), else from euler */
     p10_vec3   rotation;
     float      recoil_x, recoil_z;  /* the MG barrel's kick (radians), easing back */
+    float      mg_heat;             /* the MG barrel's heat, 0..1 (common/mg/mg.h) */
+    uint8_t    mg_locked;           /* overheated: no fire until it cooled to GAME_MG_HEAT_RESUME */
+    int16_t    mg_heat_sent;        /* the last permille told to the gunner, -1 never */
+    uint64_t   mg_heat_at;          /* when */
     uint8_t    last_attacker;       /* the last enemy who hurt it (credited for a wreck) */
     uint8_t    has_last_attacker;
     uint64_t   wreck_at;

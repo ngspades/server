@@ -8,6 +8,7 @@
 #include <Server/Packets/Packets.h>
 #include <Server/Perks.h>
 #include <Server/Plugins.h>
+#include <Server/Proto10/Bridge.h>
 #include <Server/Proto10/Mg.h>
 #include <Server/Proto10/Mount.h>
 #include <Server/Proto10/Objects.h>
@@ -237,6 +238,27 @@ static void _mg_fire(server_t* server, p10_object_t* o, player_t* gunner, uint64
     o->recoil_z += (float) (gen_rand(&server->rand) - 0.5) * 2.0f * GAME_MG_RECOIL_SIDE * MG_DEG;
 }
 
+/* the gunner's gauge: the heat in permille and whether the gun jammed, on a
+   change of 2% or of the jam, at most every 100 ms */
+static void _mg_tell_heat(server_t* server, p10_object_t* o, player_t* gunner, uint64_t now)
+{
+    int permille = (int) (o->mg_heat * 1000.0f + 0.5f);
+    int jam      = o->mg_locked ? 1 : 0;
+    int last     = o->mg_heat_sent;
+    int last_jam = last >= 0 && (last & 0x4000) ? 1 : 0;
+    int changed  = last < 0 || abs(permille - (last & 0x3FFF)) >= 20 || jam != last_jam;
+    if (!changed || now < o->mg_heat_at + 100000000ull) {
+        return;
+    }
+    o->mg_heat_at   = now;
+    o->mg_heat_sent = (int16_t) (permille | (jam << 14));
+    char        a[8], b[4];
+    const char* parts[] = {"mg-heat", a, b};
+    snprintf(a, sizeof a, "%d", permille);
+    snprintf(b, sizeof b, "%d", jam);
+    proto10_bridge_generic(server, gunner, 3, parts);
+}
+
 static void _mg_think(server_t* server, p10_object_t* o, uint64_t now)
 {
     float dt      = o->last_think ? (float) (now - o->last_think) / (float) NANO_IN_SECOND : 0.0f;
@@ -252,6 +274,19 @@ static void _mg_think(server_t* server, p10_object_t* o, uint64_t now)
     float ease = expf(-MG_RECOIL_EASE * dt);
     o->recoil_x *= ease;
     o->recoil_z *= ease;
+    /* the barrel cools whether or not somebody sits behind it, but not while
+       it is being fired (its own cooling nearly cancelled the heat a round
+       adds: 0.12 a second against 0.16): a quarter second of rest first */
+    if (o->mg_locked || now > o->next_shot + 250000000ull) {
+        o->mg_heat -= (o->mg_locked ? GAME_MG_HEAT_COOL_HOT : GAME_MG_HEAT_COOL) * dt;
+    }
+    if (o->mg_heat < 0.0f) {
+        o->mg_heat = 0.0f;
+    }
+    if (o->mg_locked && o->mg_heat <= GAME_MG_HEAT_RESUME) {
+        o->mg_locked = 0;
+        evt_log(NULL, "mg", "action=cooled entity=%u", o->id);
+    }
 
     player_t* gunner = mount_occupant(server, o->id, 0);
     if (gunner == NULL) {
@@ -271,9 +306,16 @@ static void _mg_think(server_t* server, p10_object_t* o, uint64_t now)
     o->euler.z = _mg_wrap(o->home_yaw + off);
     o->euler.x = pitch;
     o->euler.y = 0.0f;
-    if (gunner->primary_fire && now >= o->next_shot) {
+    if (gunner->primary_fire && now >= o->next_shot && !o->mg_locked) {
         _mg_fire(server, o, gunner, now);
+        o->mg_heat += GAME_MG_HEAT_PER_SHOT;
+        if (o->mg_heat >= 1.0f) {
+            o->mg_heat   = 1.0f;
+            o->mg_locked = 1;
+            evt_log(gunner, "mg", "action=overheat entity=%u", o->id);
+        }
     }
+    _mg_tell_heat(server, o, gunner, now);
 }
 
 p10_object_t* mg_place(server_t* server, player_t* owner, int x, int y, int z, const char** why)
@@ -306,6 +348,7 @@ p10_object_t* mg_place(server_t* server, player_t* owner, int x, int y, int z, c
     o->max_health          = GAME_MG_HEALTH;
     o->keep_on_team_change = 1;
     o->think               = _mg_think;
+    o->mg_heat_sent        = -1;
     p10_vec3 home          = p10_front_from_euler(o->euler);
     evt_log(owner, "mg", "action=place entity=%u cell=%d,%d,%d health=%d front=%.2f,%.2f", o->id, x, y, z, o->health,
             home.x, home.y);

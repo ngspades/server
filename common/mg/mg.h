@@ -43,4 +43,16 @@
 /* the muzzle, from the swivel along the barrel (blocks) */
 #define GAME_MG_MUZZLE        1.8f
 
+/* The barrel heats as it fires (Battlefield's emplacements): every round adds
+   HEAT_PER_SHOT of a full barrel, 1.0 is overheated, and the gun then stops
+   until it has cooled to HEAT_RESUME. Cooling is slow while it could fire
+   again and quicker once it has jammed, so holding the trigger to the end is
+   punished with a pause and a short burst rested on is not.
+   Continuous fire overheats in 1 / (0.016 x 10) = 6.25 s, then waits
+   (1.0 - 0.4) / 0.15 = 4 s. */
+#define GAME_MG_HEAT_PER_SHOT 0.016f
+#define GAME_MG_HEAT_COOL     0.12f /* per second, ready */
+#define GAME_MG_HEAT_COOL_HOT 0.15f /* per second, overheated */
+#define GAME_MG_HEAT_RESUME   0.4f
+
 #endif
