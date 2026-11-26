@@ -36,7 +36,14 @@ void send_set_hp(server_t*  server,
         evt_log(player, "hit_refused", "target=%s why=spawn_protect", player_hit->name);
         return;
     }
-    if ((player->allow_killing && server->global_ak && player->alive) || type_of_damage == 0) {
+    /* a grenade already thrown (every explosion passes is_grenade) kills
+       after its thrower died: it needs no living attacker. A thrower that
+       left is no attacker any more (its slot is about to be freed) */
+    int attacker_acts = player->alive || (is_grenade && player->state != STATE_DISCONNECTED);
+    if ((player->allow_killing && server->global_ak && attacker_acts) || type_of_damage == 0) {
+        if (!player->alive && type_of_damage != 0) {
+            evt_log(player, "grenade", "action=dead_thrower_hit victim=%s damage=%ld", player_hit->name, hp_chnage);
+        }
         hp_chnage = gamemode_hit_damage(server, player, player_hit, hp_chnage, kill_reason);
         if (hp_chnage > 0 && !plugins_on_damage(server, player, player_hit, &hp_chnage, kill_reason)) {
             return;

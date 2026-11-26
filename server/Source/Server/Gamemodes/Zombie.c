@@ -1,5 +1,6 @@
 // Copyright (c) 2026 ngspades contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include <Server/Grenade.h>
 #include <Server/Bots.h>
 #include <Server/Profile.h>
 #include <Server/Classes.h>
@@ -1011,6 +1012,7 @@ static void _zombie_start_round(server_t* server)
     int       n = 0;
     player_t *p, *tmp;
     zombie.round++;
+    grenades_clear_all(server); /* none thrown last round explodes in this one */
     HASH_ITER(hh, server->players, p, tmp)
     {
         if (_zombie_in_team(p)) {
@@ -1036,6 +1038,7 @@ static void _zombie_end_round(server_t* server, int winner, const char* why)
 {
     gamemode_vars_t* gm = &server->protocol.gamemode;
     zombie.winner       = winner;
+    grenades_clear_all(server);
     gm->score[winner]++;
     zombie.match_over = gm->score[winner] >= gm->score_limit;
     _zombie_set_state(ZOMBIE_ENDED);
