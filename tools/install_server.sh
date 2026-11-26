@@ -448,7 +448,7 @@ EOF
 ]' ;;
 			arena) MAPS_BLOCK='maps = [
     "de_dust",
-    "de_dust2",
+    "De_Dust2_342",
     "csitaly",
 ]' ;;
 			zombie) MAPS_BLOCK='maps = [

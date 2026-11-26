@@ -157,7 +157,7 @@ static inline const struct game_mode_info* game_mode_get(int k) {
 		    (avstorage, Titanic Arena, Abordage...); every one ends rounds
 		    with 16 bots */
 		 {"csitaly", "de_dust", "de_cache", "avstorage", "indiaarena", "Titanic_Arena", "Abordage", "planeCrash",
-		  "facebattle", "Penthouse", "de_dust2", "cs_assault"},
+		  "facebattle", "Penthouse", "De_Dust2_342", "cs_assault"},
 		 {GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL},
 		 0},
 		{"zombie",
