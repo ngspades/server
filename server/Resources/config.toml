@@ -308,6 +308,8 @@ log_interval_seconds = 10
 [squads]
 enabled = true   # false: everyone spawns at the team's spawn, as in plain CTF
 size    = 4      # players per squad (2..16)
+spawn   = true   # false: no respawn by a squadmate nor rally point in any mode
+                 # (ngCTF, king of the hill, territory control). Also SP_SQUAD_SPAWN
 
 
 # Sentry perk (docs/protocol-1.0.md 12.5). All keys are optional.

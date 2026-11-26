@@ -1643,7 +1643,7 @@ Ours add (decimal string arguments):
 | S→C | `mount <player> <entity> <seat>` | `<player>` sat down in `<seat>` (0 the pilot or the gunner) of entity `<entity>`; `mount <player> -1 0` when it left. Sent on every change and for everyone mounted when a client enters the game (after the lights) |
 | S→C | `use-refused <why>` | to the asker: `none` (nothing in reach), `team` (only the other team's), `full` (every seat taken), `busy` (the MG has a gunner), `dead`, `wrecked`, `rate` |
 | C→S | `squad <n>` | join squad `<n>` of my team (0 = alone), the pause menu's squad row |
-| S→C | `squads <size>` | when a 1.0 client enters the game: the squads' size, 0 when squads are off |
+| S→C | `squads <size> <spawn>` | when a 1.0 client enters the game: the squads' size, 0 when squads are off (the mode has none: creative, or `[squads] enabled = false`); `<spawn>` 1 where a respawn lands next to a squadmate and `squad-rally` is taken (ngCTF, king of the hill, territory control), 0 elsewhere (classic CTF, team deathmatch, the arena, the zombie mode, whose zombies have no squad) |
 | S→C | `squad <player> <n>` | `<player>` is in squad `<n>` (0 none): every squad when a client enters the game, then each change |
 | S→C | `squad-refused <why>` | to the asker: `full` for a `squad <n>` with no room, else a refused `squad-rally` (`no_squad`, `mode`, `dead`, `not_leader`, `too_close`, `no_ground`) |
 | C→S | `squad-rally` | drop the squad's rally point where we stand (the squad's leader only) |

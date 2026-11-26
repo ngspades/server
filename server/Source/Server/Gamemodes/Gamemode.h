@@ -105,6 +105,11 @@ typedef struct gamemode_ops
     const char* wire_name; /* protocol 1.0 "mode": babel is drawn like "ctf" */
     uint8_t     perks;     /* the jetpack, the sentry and the MG exist */
     uint8_t     features;  /* GM_FEAT_*: the other new mechanics (none in classic CTF) */
+    /* the teams with squads (Squads.c), a bit a team (SQUAD_TEAMS_BOTH):
+       Gamemode.c's wrappers then put players in squads at spawn, tell the
+       clients and take their "squad" commands. 0 for a mode without squads
+       and for the CTFs, which wire Squads.c's hooks into their ops themselves */
+    uint8_t     squad_teams;
     /* NULL: config.toml's [perks]; else P10_PERK_COUNT rules of the mode's own */
     const gm_perk_rule_t* perk_rules;
     /* NULL: the default crates, where the classes play; else the mode's own */

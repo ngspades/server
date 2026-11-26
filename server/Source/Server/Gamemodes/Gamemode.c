@@ -14,6 +14,7 @@
 #include <Server/Gamemodes/Ctf.h>
 #include <Server/Gamemodes/NgCtf.h>
 #include <Server/Gamemodes/Gamemode.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/Sky.h>
 #include <Server/Map.h>
 #include <Server/Proto10/Bridge.h>
@@ -189,8 +190,13 @@ void gamemode_init(server_t* server, uint8_t id)
     /* what was on, so a run's log says it (classic CTF: none) */
     evt_log(NULL, "gamemode", "mode=%s perks=%u assists=%d spotting=%d squad_spawn=%d classes=%d class_perks=%d",
             ops->name, ops->perks, (ops->features & GM_FEAT_ASSISTS) != 0, (ops->features & GM_FEAT_SPOTTING) != 0,
-            (ops->features & GM_FEAT_SQUAD_SPAWN) != 0, gamemode_has(server, GM_FEAT_CLASSES),
+            gamemode_has(server, GM_FEAT_SQUAD_SPAWN), gamemode_has(server, GM_FEAT_CLASSES),
             gamemode_has(server, GM_FEAT_CLASS_PERKS));
+    /* a line of its own (the CTFs' log stays as it was: bench.py check) */
+    if (ops->squad_teams != 0) {
+        evt_log(NULL, "squads", "mode=%s teams=%u spawn=%d", ops->name, ops->squad_teams,
+                gamemode_has(server, GM_FEAT_SQUAD_SPAWN));
+    }
     /* the 1.0 inventions this profile leaves out, said once a map (the
        line above prints the mode's own flags, not what the profile keeps) */
     if (profile_is_075()) {
@@ -215,6 +221,9 @@ void gamemode_tick(server_t* server)
         }
         plugins_tick(server);
         return;
+    }
+    if (ops->squad_teams != 0) {
+        squads_census(server); /* the CTFs call it from their own tick */
     }
     if (ops->tick != NULL) {
         ops->tick(server);
@@ -436,6 +445,11 @@ int gamemode_has(server_t* server, unsigned feature)
     if (profile_is_075() && (feature & GM_FEAT_PROTO10)) {
         return 0;
     }
+    /* the host's [squads] spawn = false (or the squads off) takes the
+       respawn by a mate and the rally out of every mode */
+    if (feature == GM_FEAT_SQUAD_SPAWN && !squads_spawn_on()) {
+        return 0;
+    }
     /* the mode may turn a feature on for this map: the zombie mode's classes
        are the host's choice, not the mode's own list */
     if (server->features_on & feature) {
@@ -609,6 +623,12 @@ void gamemode_spawn_facing(server_t* server, player_t* player, float* x, float* 
 int gamemode_spawn_point(server_t* server, player_t* player)
 {
     const gamemode_ops_t* ops = gamemode_current(server);
+    /* the squad first: it puts the player in one, and where the mode has
+       the respawn by a mate (GM_FEAT_SQUAD_SPAWN) places it there; else the
+       mode's own spawn (territory control's front, the arena's sides) */
+    if (ops->squad_teams != 0 && squads_spawn_point(server, player)) {
+        return 1;
+    }
     return ops->spawn_point != NULL && ops->spawn_point(server, player);
 }
 
@@ -633,6 +653,9 @@ int gamemode_escape_watch_player(server_t* server, player_t* player)
 void gamemode_client_in_game(server_t* server, player_t* player)
 {
     const gamemode_ops_t* ops = gamemode_current(server);
+    if (ops->squad_teams != 0) {
+        squads_client_in_game(server, player);
+    }
     if (ops->client_in_game != NULL) {
         ops->client_in_game(server, player);
     }
@@ -641,6 +664,9 @@ void gamemode_client_in_game(server_t* server, player_t* player)
 int gamemode_player_command(server_t* server, player_t* player, const char* command, const char* arg)
 {
     const gamemode_ops_t* ops = gamemode_current(server);
+    if (ops->squad_teams != 0 && squads_command(server, player, command, arg)) {
+        return 1;
+    }
     return ops->player_command != NULL && ops->player_command(server, player, command, arg);
 }
 

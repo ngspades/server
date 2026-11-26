@@ -4,6 +4,7 @@
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Arena.h>
 #include <Server/Gamemodes/Gamemode.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/MapMeta/MapMeta.h>
 #include <Server/Player.h>
 #include <Server/Profile.h>
@@ -1026,6 +1027,8 @@ const gamemode_ops_t arena_ops = {
 .id             = GAME_MODE_ARENA,
 .name           = "arena",
 .wire_name      = "arena",
+/* no squads: a round is a team's, nobody respawns beside a mate there */
+.squad_teams    = 0,
 .read_map       = _arena_read_map,
 .init           = _arena_init,
 .tick           = _arena_tick,

@@ -12,6 +12,7 @@
 #include <uthash/uthash.h>
 #include <enet/enet.h>
 #include <proto10/codec.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,7 @@ static struct
     uint8_t loaded;
     uint8_t enabled;
     uint8_t size;
+    uint8_t spawn; /* the respawn by a mate and the rally, where the mode has them */
 } cfg;
 
 static void _load_config(void)
@@ -42,6 +44,7 @@ static void _load_config(void)
     cfg.loaded  = 1;
     cfg.enabled = 1;
     cfg.size    = 4;
+    cfg.spawn   = 1;
     FILE* fp    = fopen(server_config_path(), "r");
     if (fp != NULL) {
         char          err[200];
@@ -57,6 +60,10 @@ static void _load_config(void)
             if (d.ok && d.u.i >= 2 && d.u.i <= 16) {
                 cfg.size = (uint8_t) d.u.i;
             }
+            d = toml_bool_in(table, "spawn");
+            if (d.ok) {
+                cfg.spawn = d.u.b ? 1 : 0;
+            }
         }
         if (root != NULL) {
             toml_free(root);
@@ -66,7 +73,27 @@ static void _load_config(void)
     if (env != NULL && *env) {
         cfg.enabled = atoi(env) != 0;
     }
-    LOG_INFO("Squads: %s (up to %u players)", cfg.enabled ? "on" : "off", cfg.size);
+    env = getenv("SP_SQUAD_SPAWN");
+    if (env != NULL && *env) {
+        cfg.spawn = atoi(env) != 0;
+    }
+    LOG_INFO("Squads: %s (up to %u players, respawn by a mate %s)", cfg.enabled ? "on" : "off", cfg.size,
+             cfg.spawn ? "on" : "off");
+}
+
+int squads_spawn_on(void)
+{
+    _load_config();
+    return cfg.enabled && cfg.spawn;
+}
+
+/* the mode's teams that have squads: every team where the CTFs wire the
+   squads themselves (squad_teams 0), else the mode's bits (the zombie
+   mode's survivors, never its zombies) */
+static int _team_has_squads(server_t* server, uint8_t team)
+{
+    const gamemode_ops_t* ops = gamemode_current(server);
+    return (team == TEAM_A || team == TEAM_B) && (ops->squad_teams == 0 || (ops->squad_teams & (1u << team)));
 }
 
 static int _in_play(const player_t* p)
@@ -348,7 +375,17 @@ int squads_spawn_point(server_t* server, player_t* player)
     if (!cfg.enabled || player->team == TEAM_SPECTATOR) {
         return 0;
     }
-    if (ctf_bot_has_post(server, player)) {
+    /* a team of the mode without squads (a survivor turned zombie): out of
+       its squad, so its old mates stop seeing its name as a mate's */
+    if (!_team_has_squads(server, player->team)) {
+        if (player->squad != 0 || player->squad_team != player->team) {
+            _set_squad(server, player, 0, "mode");
+        }
+        return 0;
+    }
+    /* the CTF's own roles keep a bot out of the squads (its guard, campers);
+       a mode on the generic squads has none */
+    if (gamemode_current(server)->squad_teams == 0 && ctf_bot_has_post(server, player)) {
         squads_leave_for_role(server, player);
         return 0; /* the team's spawn */
     }
@@ -417,6 +454,9 @@ void squads_client_in_game(server_t* server, player_t* player)
     p10_start_generic_command(&w);
     p10_put_generic_part(&w, "squads");
     p10_put_generic_part(&w, size);
+    /* whether a respawn lands by a mate and the rally point is taken: the
+       client offers "Rally here" and counts the mates alive only then */
+    p10_put_generic_part(&w, cfg.enabled && gamemode_has(server, GM_FEAT_SQUAD_SPAWN) ? "1" : "0");
     _send(player, &w);
     if (!cfg.enabled) {
         return;
@@ -452,6 +492,10 @@ int squads_command(server_t* server, player_t* player, const char* command, cons
         evt_log(player, "squad", "action=refused squad=%d why=%s", squad, cfg.enabled ? "invalid" : "disabled");
         return 1;
     }
+    if (!_team_has_squads(server, player->team)) {
+        evt_log(player, "squad", "action=refused squad=%d why=mode", squad);
+        return 1;
+    }
     if (squad > 0 && _members(server, player->team, (uint8_t) squad, player) >= cfg.size) {
         uint8_t    buf[48];
         p10_writer w;
@@ -465,5 +509,69 @@ int squads_command(server_t* server, player_t* player, const char* command, cons
     }
     /* takes effect now; the next respawn goes next to the new squad */
     _set_squad(server, player, (uint8_t) squad, "chosen");
+    return 1;
+}
+
+player_t* squads_leader(server_t* server, player_t* player)
+{
+    _load_config();
+    if (!cfg.enabled || player->squad == 0 || player->squad > SQUADS_MAX || player->squad_team != player->team ||
+        (player->team != TEAM_A && player->team != TEAM_B))
+    {
+        return NULL;
+    }
+    return _leader(server, player->team, player->squad);
+}
+
+/* a squad that respawned together walked apart at once: every bot took its
+   own way to the hill or the territory (the flank, the rank's pick) and the
+   squad met only there, if at all. Its members now keep up with the leader
+   until one of them is near the objective, and then each takes its own
+   place there. The leader id + 1 a bot follows, 0 none (for the log) */
+static uint8_t following[256];
+
+int squads_follow(server_t* server, player_t* bot, float ox, float oy, float split, gm_bot_goal_t* out)
+{
+    player_t*   leader = bot->is_bot ? squads_leader(server, bot) : NULL;
+    const char* why    = "alone";
+    int         follow = 0;
+    if (leader == bot) {
+        why = "leads";
+    } else if (leader != NULL && (!leader->alive || leader->state != STATE_READY)) {
+        why = "leader_dead";
+    } else if (leader != NULL && hypotf(bot->movement.position.x - ox, bot->movement.position.y - oy) <= split) {
+        why = "near";
+    } else if (leader != NULL &&
+               hypotf(leader->movement.position.x - ox, leader->movement.position.y - oy) <= split)
+    {
+        why = "leader_there";
+    } else if (leader != NULL) {
+        follow = 1;
+    }
+    uint8_t mark = follow ? (uint8_t) (leader->id + 1) : 0;
+    if (following[bot->id] != mark) {
+        if (follow) {
+            evt_log(bot, "bot_squad", "action=follow leader=%u squad=%s dist=%.0f", leader->id,
+                    squad_names[bot->squad],
+                    hypotf(bot->movement.position.x - leader->movement.position.x,
+                           bot->movement.position.y - leader->movement.position.y));
+        } else {
+            evt_log(bot, "bot_squad", "action=split why=%s squad=%s", why,
+                    squad_names[bot->squad <= SQUADS_MAX ? bot->squad : 0]);
+        }
+        following[bot->id] = mark;
+    }
+    if (!follow) {
+        return 0;
+    }
+    memset(out, 0, sizeof(*out));
+    gm_goal_name(out, "squad-follow", GM_INTENT_PUSH | GM_INTENT_SQUAD | GM_INTENT_WITH);
+    out->x       = leader->movement.position.x;
+    out->y       = leader->movement.position.y;
+    out->z       = leader->movement.position.z + 2.4f;
+    out->hold    = 4.0f;
+    out->role    = GM_BOT_RUSH; /* shooting on the move, like the squad's leader off the objective */
+    out->watch_x = leader->movement.position.x + leader->movement.forward_orientation.x * 10.0f;
+    out->watch_y = leader->movement.position.y + leader->movement.forward_orientation.y * 10.0f;
     return 1;
 }
