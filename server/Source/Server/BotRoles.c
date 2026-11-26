@@ -7,6 +7,7 @@
 
 #include <Server/MapStore.h>
 #include <Server/BotsInternal.h>
+#include <Server/BotHeli.h>
 #include <Server/Classes.h>
 
 /* going the hidden way: the infiltrator always, a sneaky attacker while its
@@ -529,6 +530,11 @@ uint8_t _bot_mode_goal(server_t* server, player_t* bot, bot_ai_t* ai, float* gx,
     gm_bot_goal_t goal;
     memset(&goal, 0, sizeof(goal));
     int         has  = gamemode_bot_goal(server, bot, &goal);
+    /* on its way to a helicopter it decided to fly (BotHeli.c): its door is
+       the goal until it sits in it */
+    if (bot_heli_goal(server, bot, &goal)) {
+        has = 1;
+    }
     const char* name = has && goal.name ? goal.name : "none";
     *exact           = has ? goal.exact : 0;
     *rush            = has ? goal.rush : 0;

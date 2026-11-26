@@ -364,6 +364,15 @@ build_chance = 35
 help_chance = 70
 build_cooldown = 60
 
+# Bots fly helicopters (protocol 1.0, the 1024 maps that have them): an
+# attacker near its team's free helicopter, with its goal far away, takes it
+# on a heli_chance roll (percent; one roll a helicopter a minute), says so,
+# flies to the goal, lands and gets out. A human waiting in a passenger seat
+# always gets a pilot. Set heli_enabled false to keep bots on foot. Also
+# SP_BOT_HELI and SP_BOT_HELI_CHANCE.
+heli_enabled = true
+heli_chance = 30
+
 # Browsers join over WebRTC (docs/web.md, docs/protocol-1.0.md "WebRTC
 # transport"): every browser player on this one UDP port (open it in the
 # firewall and forward it like the game's port). Default: the game's port
