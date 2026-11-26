@@ -14,4 +14,5 @@ server/master.key
 server/webrtc.pem
 server/Resources/plugins/*
 !server/Resources/plugins/README.md
+!server/Resources/plugins/server_tools.lua
 server/Resources/plugins/data/
