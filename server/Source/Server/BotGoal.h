@@ -116,6 +116,10 @@ typedef struct
                       fights from it (king of the hill's cylinder: anywhere over
                       the ring counts). 0: a roof is only ever a place on the
                       way (a wearer still takes those) */
+    uint8_t plunge; /* the bot stands far over the ground its enemies walk (Babel's
+                       slab, 40 blocks up): a grenade at one in plain sight
+                       below it is a throw worth solving, where on level
+                       ground only a hidden or a grouped enemy is */
 } gm_bot_goal_t;
 
 /* a goal's name and what it is for, set together: a mode that renames its

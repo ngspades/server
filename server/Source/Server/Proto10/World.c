@@ -334,7 +334,7 @@ static const char* _world_why(server_t* server, player_t* player, uint8_t action
         return "mode";
     }
     if (!gamemode_cell_editable(server, c.x, c.y, c.z)) {
-        return map_meta_cell_protected(server, c.x, c.y, c.z) ? "map-protected" : "gamemode";
+        return gamemode_cell_why(server, c.x, c.y, c.z);
     }
     return "rate-limited";
 }

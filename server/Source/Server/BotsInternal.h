@@ -266,6 +266,7 @@ typedef struct bot_ai
     uint8_t  goal_climb;    // gm_bot_goal_t.climb
     uint8_t  goal_walk;     // gm_bot_goal_t.walk_only: no digging, no sneaking
     uint8_t  goal_keep;     // gm_bot_goal_t.keep_terrain: no spade out of a jam either
+    uint8_t  goal_plunge;   // gm_bot_goal_t.plunge: grenades at enemies far below in plain sight
     uint64_t stealth_off;   // a sneaking plan came back partial: plain plans until then
     uint64_t drop_ok;       // a planned drop: the rail lets it step off until then (_bot_turn)
     const char* plan_why;   // why the pending plan was asked for (bot_nav action=plan why=)

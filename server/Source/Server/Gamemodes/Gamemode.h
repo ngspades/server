@@ -146,6 +146,8 @@ typedef struct gamemode_ops
     int (*allows_respawn)(server_t* server, player_t* player);
     /* 1 for a cell nobody may build on or destroy */
     int (*cell_protected)(server_t* server, int x, int y, int z);
+    /* why a cell cell_protected holds, for the refusal's log line (NULL: "gamemode") */
+    const char* (*cell_protect_why)(server_t* server, int x, int y, int z);
     /* the mode's own GameModeState keys */
     void (*state_keys)(server_t* server, gm_keys_t* out);
     /* the match summary's column of the mode's own (gamemode_match_won):
@@ -236,6 +238,8 @@ void gamemode_terrain_changed(server_t* server, int built);
 /* queries */
 int     gamemode_allows_respawn(server_t* server, player_t* player);
 uint8_t gamemode_cell_editable(server_t* server, int x, int y, int z);
+/* the reason gamemode_cell_editable said no, as a log word */
+const char* gamemode_cell_why(server_t* server, int x, int y, int z);
 uint8_t gamemode_grenade_can_destroy(server_t* server, vector3f_t pos);
 int     gamemode_has_perks(server_t* server);
 int     gamemode_has(server_t* server, unsigned feature);

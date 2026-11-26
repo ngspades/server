@@ -37,7 +37,7 @@ block_action_build(server_t* server, player_t* player, uint8_t action_type, uint
     {
         evt_log(player, "block", "action=build cell=%d,%d,%d accepted=0 why=%s blocks_left=%u bot=%u item=%u",
                 (int) X, (int) Y, (int) Z,
-                !gamemode_cell_editable(server, X, Y, Z) ? (map_meta_cell_protected(server, X, Y, Z) ? "map-protected" : "gamemode")
+                !gamemode_cell_editable(server, X, Y, Z) ? gamemode_cell_why(server, X, Y, Z)
                                                         : (player->blocks == 0
                                                                ? "no-blocks"
                                                                : (!is_block_placable(server, position) ? "not-placeable"
