@@ -546,6 +546,7 @@ uint8_t _bot_mode_goal(server_t* server, player_t* bot, bot_ai_t* ai, float* gx,
     ai->goal_climb   = has ? goal.climb : 0;
     ai->goal_walk    = has ? goal.walk_only : 0;
     ai->goal_keep    = has ? goal.keep_terrain : 0;
+    ai->goal_plunge  = has ? goal.plunge : 0;
     ai->goal_intent  = has ? goal.intent : 0;
     ai->camp_ground  = has ? goal.camp_ground : 0;
     ai->goal_perch   = has ? goal.perch : 0.0f;

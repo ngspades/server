@@ -1162,13 +1162,19 @@ uint8_t _bot_grenade(server_t* server, player_t* bot, bot_ai_t* ai, player_t* ta
     float tdx = target->movement.position.x - bot->movement.position.x;
     float tdy = target->movement.position.y - bot->movement.position.y;
     float td  = sqrtf(tdx * tdx + tdy * tdy);
-    if (td < BOT_NADE_MIN || td > BOT_NADE_MAX) {
+    /* from far over the enemy's ground (Babel's slab) one in plain sight is a
+       target too: the throw falls on it from above, and it cannot be dodged
+       by ducking behind a wall */
+    uint8_t plunge = ai->goal_plunge && visible && target->movement.position.z - bot->movement.position.z > 10.0f;
+    if (td < (plunge ? 3.0f : BOT_NADE_MIN) || td > BOT_NADE_MAX) {
         return 0;
     }
     /* behind cover, or with company */
     uint8_t why = 0;
     if (!visible && now - ai->last_seen < _bot_secs(4.0f)) {
         why = 1;
+    } else if (plunge) {
+        why = 3;
     } else if (visible) {
         player_t *p, *tmp;
         HASH_ITER(hh, server->players, p, tmp)
@@ -1192,7 +1198,8 @@ uint8_t _bot_grenade(server_t* server, player_t* bot, bot_ai_t* ai, player_t* ta
     int        best = 0;
     float      bfuse = 0.0f;
     vector3f_t bdir  = {0, 0, 0};
-    for (int k = 0; k <= 14; k++) {
+    /* a throw down at the ground starts below the level (pitch > 0) */
+    for (int k = plunge ? -7 : 0; k <= 14; k++) {
         float      pitch = -0.05f - 0.06f * (float) k; /* z grows downwards: negative is up */
         vector3f_t dir   = {cosf(yaw) * cosf(pitch), sinf(yaw) * cosf(pitch), sinf(pitch)};
         float      fuse  = 0.0f;
@@ -1219,7 +1226,7 @@ uint8_t _bot_grenade(server_t* server, player_t* bot, bot_ai_t* ai, player_t* ta
     ai->nade_until  = now + _bot_secs(1.5f);
     ai->nade_next   = now + _bot_secs(BOT_NADE_EVERY);
     evt_log(bot, "bot_nade", "action=aim target=%u why=%s dist=%.1f damage=%d fuse=%.2f", target->id,
-            why == 1 ? "cover" : "group", td, best, bfuse);
+            why == 1 ? "cover" : why == 3 ? "plunge" : "group", td, best, bfuse);
     _bot_set_tool(server, bot, TOOL_GRENADE);
     ai->next_think = now + NANO_IN_MILLI * 50;
     return 1;

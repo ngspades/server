@@ -404,6 +404,21 @@ uint8_t gamemode_cell_editable(server_t* server, int x, int y, int z)
     return ops->cell_protected == NULL || !ops->cell_protected(server, x, y, z);
 }
 
+const char* gamemode_cell_why(server_t* server, int x, int y, int z)
+{
+    if (map_meta_cell_protected(server, x, y, z)) {
+        return "map-protected";
+    }
+    const gamemode_ops_t* ops = gamemode_current(server);
+    if (ops->cell_protect_why != NULL) {
+        const char* why = ops->cell_protect_why(server, x, y, z);
+        if (why != NULL) {
+            return why;
+        }
+    }
+    return "gamemode";
+}
+
 /* a grenade breaks blocks only when every cell it would break may be edited:
    the 3x3x3 cube handle_grenade clears (checking only the corners missed
    the middle row, a one-cell protected line like Busan_Port's) */

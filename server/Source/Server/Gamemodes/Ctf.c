@@ -702,12 +702,24 @@ void _ctf_terrain_changed(server_t* server, int built)
     }
 }
 
-/* the tower's platform */
+/* the tower's platform. As in the original Babel script nothing may be built
+   on it, against it or under it, and nothing of it may be broken: the slab's
+   footprint is protected at z = 0 (the cells a player stands in on top of
+   it), z = 1 (the slab itself, plus the one cell wide strip round it, which
+   is air: nobody fills it) and z = 2 (the cells under it). Only the strip's
+   z = 2 stays open, where the pillars to climb on it end (a pillar top there
+   is a step up onto the slab, and no cell of it touches a platform cell).
+   A refused edit logs why=babel-platform */
 static int _babel_cell_protected(server_t* server, int x, int y, int z)
 {
     (void) server;
     return ((x >= 206 && x <= 306) && (y >= 240 && y <= 272) && (z == 2 || z == 0)) ||
-           ((x >= 205 && x <= 307) && (y >= 239 && y <= 273) && (z == 1));
+           ((x >= 205 && x <= 307) && (y >= 239 && y <= 273) && (z == 1 || z == 0));
+}
+
+static const char* _babel_cell_why(server_t* server, int x, int y, int z)
+{
+    return _babel_cell_protected(server, x, y, z) ? "babel-platform" : NULL;
 }
 
 static void _ctf_intel_value(server_t* server, uint8_t team, char* out)
@@ -2583,33 +2595,82 @@ static void _babel_stair_plan(server_t* server)
     }
 }
 
-/* One wall per team between its staircase's foot (and its tent) and the
-   enemy: it shields what the team stands on from the side the enemy comes
-   from, across the ground approach. It used to stand 5 columns outward of
-   the foot, on the far side of the staircase, where it shielded nothing the
-   enemy crossed: players saw the bots build it behind the staircase, on the
-   side away from the enemy. It goes 5 columns from the foot toward the
-   enemy's tent, long enough to cover the foot's lanes and the tent's side,
-   3 blocks high from each column's own ground, with every third column's top
-   cell left open as a window. The top cell is where a standing eye is (the
-   castle wall's lesson: a two high gap put the merlons at eye height and
-   held 40 of the 70 shots its own wall stopped). The wallers hold the
-   windows behind it, looking out at the enemy. Planned once a map like the
-   staircase; a cell dug out is put back from the same plan */
-#define BABEL_WALL_LEN  20  /* columns across the approach */
-#define BABEL_WALL_HIGH 3   /* g-1, g-2, the eye's cell at g-3 */
-#define BABEL_WALL_OUT  5   /* columns from the foot toward the enemy: past the
-                               guard's post (3 out), which then stands behind
-                               the wall and shoots through a window too */
+/* One wall per team, two stories high, on the line where the platform begins:
+   it runs along the slab's own edge (x 206 for the west team, 306 for the
+   east, y 242..270 over the pillars' ladders and the staircase's lanes), its
+   holders on that line and the front wall one column toward the enemy. It
+   used to stand 5 columns from the staircase's foot, where the platform did
+   not begin: the owner played it and asked for the platform's own line, in
+   two floors. The wall faces the enemy, who comes under the tower; the
+   pillar strip (x 205 / 307, one column outside the slab) is behind it and
+   stays free, so the pillars the bots climb by still go up.
+
+   Per column i (g the front column's ground top, rows count up from it, a
+   row's cell is z = g - 1 - row):
+     rows 0-2   the lower story's wall; row 2 is the eye's cell, open on a
+                window column (the lower holders stand behind it, on the
+                ground, under the deck)
+     row 3      the wall under the deck, and the deck itself one column
+                behind it (x - dir, z = g - 4): a floor over the lower
+                holders' heads, a cell clear of their eye cell
+     rows 4-6   the upper story's parapet; row 6 is the upper holders' eye
+                cell, open on a window column. They stand on the deck.
+   A ramp of stepped columns beyond each end of the line (1, 2 and 3 blocks
+   high, behind the wall, then the deck one more) takes a bot up. The upper
+   rows are put from the deck, once it stands (a block over a bot's head is
+   out of the server's reach from the ground), the others from the ground.
+   Every cell is outside the slab's protected footprint (z <= 2) and the
+   staircase's cells; the plan is made once a map and a cell dug out is put
+   back from it */
+/* the staircase's foot: the hunters' post is this far past it, and a waller this near it is on the lowest steps, no climber */
+#define BABEL_FOOT_OUT  7
+#define BABEL_FOOT_NEAR 5
+/* a column's ground for the wall: under the slab the map's top is the slab
+   itself (z = 1), so the ground is the first solid cell below the platform's
+   own cells (z 0 to 2); anywhere else the top */
+static int _babel_wall_top(server_t* server, int x, int y)
+{
+    map_store_t* map = &server->s_map.map;
+    if (x >= 206 && x <= 306 && y >= 240 && y <= 272) {
+        for (int z = 3; z < map->size_z; z++) {
+            if (map_solid(map, (uint16_t) x, (uint16_t) y, (uint16_t) z)) {
+                return z;
+            }
+        }
+        return map->size_z;
+    }
+    return map_top(map, (uint16_t) x, (uint16_t) y);
+}
+
+#define BABEL_WALL_LEN   29 /* columns: y 242..270 */
+#define BABEL_WALL_Y0    242
+#define BABEL_WALL_ROWS  7
+#define BABEL_WALL_DECK  3  /* the deck's row, over the lower holders */
 #define BABEL_WALL_EVERY 3  /* every third column is a window */
+#define BABEL_WALL_RAMP  3  /* the ramp's columns at each end */
+#define BABEL_WALL_CELLS (BABEL_WALL_LEN * (BABEL_WALL_ROWS + 1) + 2 * 6)
+
+typedef struct
+{
+    int x, y, z;
+    int column; /* the wall column it belongs to (a ramp: the end's) */
+    int kind;   /* 0 front wall, 1 deck, 2 ramp */
+    int row;
+} babel_wcell_t;
 
 static struct {
     int n;          /* columns planned; 0: no wall on this map */
-    int x;          /* the line's column, the same for all of them */
+    int x;          /* the front wall's column */
+    int xd;         /* the line behind it: the deck, and where the lower holders stand */
     int dir;        /* from our side toward the enemy: +1 east, -1 west */
     int y[BABEL_WALL_LEN];
-    int ground[BABEL_WALL_LEN]; /* each column's own ground top */
-    int window[BABEL_WALL_LEN]; /* 1: its top cell is left open */
+    int ground[BABEL_WALL_LEN];   /* the front column's ground top */
+    int ground_d[BABEL_WALL_LEN]; /* the holders' column's ground top (the deck's, once built, is no ground) */
+    int window[BABEL_WALL_LEN];   /* 1: its eye cells are left open */
+    int ramps;                    /* ends with a ramp */
+    int two;                      /* the upper story is planned (a ramp leads to the deck) */
+    int ncell;
+    babel_wcell_t cell[BABEL_WALL_CELLS];
 } babel_wall[2];
 
 /* a cell of our staircase (a step or the support under it): the wall never
@@ -2627,114 +2688,212 @@ static int _babel_wall_on_stair(int t, int x, int y, int z)
     return 0;
 }
 
-static void _babel_wall_plan(server_t* server)
+static void _babel_wall_add(int t, int x, int y, int z, int column, int kind, int row)
+{
+    if (babel_wall[t].ncell < BABEL_WALL_CELLS) {
+        babel_wall[t].cell[babel_wall[t].ncell++] = (babel_wcell_t) {x, y, z, column, kind, row};
+    }
+}
+
+/* one try of the line at a shift from the slab's edge: how many columns
+   stand (a shift is for a lake under the edge: the line moves outward, away
+   from the slab, until enough of it is dry ground) */
+static int _babel_wall_try(server_t* server, int t, int xd, int dir)
 {
     map_store_t* map = &server->s_map.map;
+    int          xw  = xd + dir;
+    int          n   = 0;
+    if (xw < 1 || xw + 1 >= map->size_x || xd < 1) {
+        return 0;
+    }
+    for (int i = 0; i < BABEL_WALL_LEN; i++) {
+        int y = BABEL_WALL_Y0 + i;
+        if (y < 0 || y >= map->size_y) {
+            continue;
+        }
+        int g = _babel_wall_top(server, xw, y), gd = _babel_wall_top(server, xd, y);
+        /* dry ground with room over it for the seven rows and the platform's
+           protected z <= 2 above that, the holders' column dry too and at
+           the same level (a step apart at most: the deck is cut at the
+           front's ground) */
+        if (g >= map->size_z - 1 || gd >= map->size_z - 1 || g < 3 + BABEL_WALL_ROWS || abs(g - gd) > 1) {
+            continue;
+        }
+        int ok = 1;
+        for (int r = 0; r < BABEL_WALL_ROWS && ok; r++) {
+            int z = g - 1 - r;
+            ok = !map_solid(map, (uint16_t) xw, (uint16_t) y, (uint16_t) z) &&
+                 !_babel_wall_on_stair(t, xw, y, z) && gamemode_cell_editable(server, xw, y, z);
+        }
+        int zdeck = g - 1 - BABEL_WALL_DECK;
+        ok        = ok && !map_solid(map, (uint16_t) xd, (uint16_t) y, (uint16_t) zdeck) &&
+             gamemode_cell_editable(server, xd, y, zdeck);
+        if (!ok) {
+            continue;
+        }
+        babel_wall[t].y[n]        = y;
+        babel_wall[t].ground[n]   = g;
+        babel_wall[t].ground_d[n] = gd;
+        babel_wall[t].window[n]   = i % BABEL_WALL_EVERY == 0;
+        n++;
+    }
+    /* the holders walk the line column to column: keep the longest run of
+       neighbours whose ground is within a step of each other (a two block
+       cliff between two columns left the holder at the foot of it, unable to
+       reach the cell it was sent to, for the whole match) */
+    int best_a = 0, best_n = 0;
+    for (int a = 0; a < n;) {
+        int b = a + 1;
+        while (b < n && babel_wall[t].y[b] == babel_wall[t].y[b - 1] + 1 &&
+               abs(babel_wall[t].ground_d[b] - babel_wall[t].ground_d[b - 1]) <= 1)
+        {
+            b++;
+        }
+        if (b - a > best_n) {
+            best_a = a;
+            best_n = b - a;
+        }
+        a = b;
+    }
+    if (best_n < n) {
+        for (int k = 0; k < best_n; k++) {
+            babel_wall[t].y[k]        = babel_wall[t].y[best_a + k];
+            babel_wall[t].ground[k]   = babel_wall[t].ground[best_a + k];
+            babel_wall[t].ground_d[k] = babel_wall[t].ground_d[best_a + k];
+            babel_wall[t].window[k]   = (babel_wall[t].y[k] - BABEL_WALL_Y0) % BABEL_WALL_EVERY == 0;
+        }
+        n = best_n;
+    }
+    return n;
+}
+
+static void _babel_wall_plan(server_t* server)
+{
     for (int t = 0; t < 2; t++) {
-        babel_wall[t].n   = 0;
-        babel_wall[t].dir = 0;
+        babel_wall[t].n     = 0;
+        babel_wall[t].dir   = 0;
+        babel_wall[t].ncell = 0;
+        babel_wall[t].ramps = 0;
+        babel_wall[t].two   = 0;
         if (babel_stair[t].len == 0) {
             continue;
         }
-        int        len    = babel_stair[t].len;
-        int        foot_x = babel_stair[t].x[len - 1], foot_y = babel_stair[t].y0 + 1;
-        vector3f_t tent   = server->protocol.gamemode.base[t];
-        vector3f_t enemy  = server->protocol.gamemode.base[1 - t];
-        /* the side the enemy comes from is our foot's way to its tent: a
-           team's base and staircase sit on its own side of the slab, the
-           enemy's on the other. Read from the tents, never from `dir`
-           alone: `dir` is outward from the slab, which is our side */
-        int edir = enemy.x >= (float) foot_x ? 1 : -1;
-        int wx   = foot_x + edir * BABEL_WALL_OUT;
-        /* cover the foot's lanes and the tent's side; a tent far from the
-           foot keeps the wall on the foot */
-        int cy = foot_y;
-        if (fabsf(tent.y - (float) foot_y) <= (float) (BABEL_WALL_LEN - 2)) {
-            cy = (int) roundf((tent.y + (float) foot_y) * 0.5f);
+        vector3f_t tent  = server->protocol.gamemode.base[t];
+        vector3f_t enemy = server->protocol.gamemode.base[1 - t];
+        /* the staircase leaves the slab outward (stair dir), the enemy is
+           the other way: the wall faces inward, toward the tower's far side */
+        int edir  = -babel_stair[t].dir;
+        int edge  = edir > 0 ? 206 : 306; /* the slab's first column on our side */
+        int shift = 0, n = 0;
+        for (; shift <= 10; shift++) {
+            /* a shift of 1 or 2 would put the front wall on the pillars'
+               strip: those columns are the bots' ladders */
+            if (shift == 1 || shift == 2) {
+                continue;
+            }
+            n = _babel_wall_try(server, t, edge + babel_stair[t].dir * shift, edir);
+            if (n >= 12) {
+                break;
+            }
         }
-        int start = cy - BABEL_WALL_LEN / 2;
-        int end   = start + BABEL_WALL_LEN - 1;
-        babel_wall[t].dir = edir;
-        if (wx < 1 || wx + 1 >= map->size_x) {
-            LOG_INFO("Babel wall for team %d: no room at x %d", t, wx);
+        if (n < 12) {
+            LOG_INFO("Babel wall for team %d: no dry ground along the slab's edge (%d columns)", t, n);
+            evt_log(NULL, "bot_babel", "action=wall_plan team=%d columns=%d ok=0 why=no_ground", t, n);
             continue;
         }
-        int n = 0;
-        for (int i = 0; i < BABEL_WALL_LEN; i++) {
-            int y = start + i;
-            if (y < 0 || y >= map->size_y) {
-                continue;
-            }
-            /* never the tent's own 2x2 cells */
-            if (wx >= (int) tent.x - 2 && wx <= (int) tent.x + 1 && y >= (int) tent.y - 2 && y <= (int) tent.y + 1) {
-                continue;
-            }
-            int g = map_top(map, (uint16_t) wx, (uint16_t) y);
-            /* dry ground with room over it, and the column behind it dry too
-               (that is where its holder stands, on our side) */
-            if (g >= map->size_z - 1 || g <= BABEL_WALL_HIGH ||
-                map_top(map, (uint16_t) (wx - edir), (uint16_t) y) >= map->size_z - 1)
-            {
-                continue;
-            }
-            int ok = 1;
-            for (int z = g - 1; z >= g - BABEL_WALL_HIGH && ok; z--) {
-                ok = !map_solid(map, (uint16_t) wx, (uint16_t) y, (uint16_t) z) &&
-                     !_babel_wall_on_stair(t, wx, y, z) && gamemode_cell_editable(server, wx, y, z);
-            }
-            if (!ok) {
-                continue;
-            }
-            babel_wall[t].y[n]      = y;
-            babel_wall[t].ground[n] = g;
-            babel_wall[t].window[n] = i % BABEL_WALL_EVERY == 0;
-            n++;
+        int xd = edge + babel_stair[t].dir * shift;
+        /* the plan's arrays hold the last try's columns: it was the chosen
+           shift's (the loop stopped there) */
+        int wx = xd + edir;
+        babel_wall[t].n   = n;
+        babel_wall[t].x   = wx;
+        babel_wall[t].xd  = xd;
+        babel_wall[t].dir = edir;
+        int windows = 0;
+        for (int i = 0; i < n; i++) {
+            windows += babel_wall[t].window[i];
         }
-        babel_wall[t].n = n;
-        babel_wall[t].x = wx;
-        if (n > 0) {
-            int windows = 0;
+        if (windows == 0) {
+            babel_wall[t].window[n / 2] = 1;
+        }
+        /* the cells, row by row: the lower story first, the ramps with it
+           (a bot walks up them to put the upper rows), the deck with row 3 */
+        int ys = babel_wall[t].y[0], ye = babel_wall[t].y[n - 1];
+        /* the ramps: beyond each end of the line, behind the wall, columns
+           that rise toward the deck by a block each (the column beside the
+           deck is one under its floor, the next two under that, ...), filled
+           from their own ground up: a slope under the wall changes how many
+           blocks that is, 1 to 4, not the steps */
+        struct
+        {
+            int y, g, top;
+        } ramp[2][BABEL_WALL_RAMP];
+        int ramp_ok[2] = {0, 0};
+        for (int e = 0; e < 2; e++) {
+            int step = e == 0 ? -1 : 1, y0 = e == 0 ? ys : ye, col = e == 0 ? 0 : n - 1;
+            int zd = babel_wall[t].ground[col] - 1 - BABEL_WALL_DECK;
+            ramp_ok[e] = 1;
+            for (int j = 0; j < BABEL_WALL_RAMP && ramp_ok[e]; j++) {
+                int y = y0 + step * (1 + j);
+                if (y < 0 || y >= server->s_map.map.size_y) {
+                    ramp_ok[e] = 0;
+                    break;
+                }
+                int g = _babel_wall_top(server, xd, y);
+                int top = zd + 1 + j;
+                ramp[e][j].y = y;
+                ramp[e][j].g = g;
+                ramp[e][j].top = top;
+                ramp_ok[e] = g < server->s_map.map.size_z - 1 && top >= 3 && g - top >= -1 && g - top <= 4;
+                for (int z = top; z < g && ramp_ok[e]; z++) {
+                    ramp_ok[e] = !map_solid(&server->s_map.map, (uint16_t) xd, (uint16_t) y, (uint16_t) z) &&
+                                 !_babel_wall_on_stair(t, xd, y, z) && gamemode_cell_editable(server, xd, y, z);
+                }
+            }
+            if (ramp_ok[e]) {
+                /* the ground past the ramp's foot must be within a jump of its last step */
+                int yo = y0 + step * (1 + BABEL_WALL_RAMP);
+                int go = yo >= 0 && yo < server->s_map.map.size_y
+                             ? _babel_wall_top(server, xd, yo)
+                             : 64;
+                ramp_ok[e] = go - ramp[e][BABEL_WALL_RAMP - 1].top >= -3 && go - ramp[e][BABEL_WALL_RAMP - 1].top <= 1;
+            }
+            babel_wall[t].ramps += ramp_ok[e];
+        }
+        /* a deck nobody can climb to holds no upper story: one floor then */
+        int two = babel_wall[t].ramps > 0;
+        for (int row = 0; row < (two ? BABEL_WALL_ROWS : BABEL_WALL_DECK); row++) {
             for (int i = 0; i < n; i++) {
-                windows += babel_wall[t].window[i];
+                int open = babel_wall[t].window[i] && (row == 2 || row == 6);
+                if (!open) {
+                    _babel_wall_add(t, wx, babel_wall[t].y[i], babel_wall[t].ground[i] - 1 - row, i, 0, row);
+                }
             }
-            if (windows == 0) {
-                /* the lake cut the columns the windows were on: one in the
-                   middle, or the holders would have nothing to shoot through
-                   (and no goal once the wall is whole) */
-                babel_wall[t].window[n / 2] = 1;
+            for (int e = 0; e < 2 && two; e++) {
+                for (int j = 0; ramp_ok[e] && j < BABEL_WALL_RAMP; j++) {
+                    int z = ramp[e][j].g - 1 - row;
+                    if (z >= ramp[e][j].top) {
+                        _babel_wall_add(t, xd, ramp[e][j].y, z, e == 0 ? 0 : n - 1, 2, row);
+                    }
+                }
+            }
+            if (two && row == BABEL_WALL_DECK) {
+                for (int i = 0; i < n; i++) {
+                    _babel_wall_add(t, xd, babel_wall[t].y[i], babel_wall[t].ground[i] - 1 - row, i, 1, row);
+                }
             }
         }
-        /* the numbers the side is judged by: the middle of the line is
-           closer to the enemy's tent than the foot is, and the enemy's way
-           to the foot crosses the line (a wall behind the staircase passed
-           neither: it was 5 columns past the foot, out of that way) */
-        float mid_y  = n > 0 ? ((float) babel_wall[t].y[0] + (float) babel_wall[t].y[n - 1]) * 0.5f : (float) cy;
-        float d_wall = (mid_y - enemy.y) * (mid_y - enemy.y) + ((float) wx - enemy.x) * ((float) wx - enemy.x);
-        float d_foot = ((float) foot_y - enemy.y) * ((float) foot_y - enemy.y) +
-                       ((float) foot_x - enemy.x) * ((float) foot_x - enemy.x);
-        int closer = d_wall < d_foot;
-        int cross  = 0;
-        if (n > 0 && enemy.x != (float) foot_x) {
-            float f  = ((float) wx - enemy.x) / ((float) foot_x - enemy.x);
-            float yc = enemy.y + f * ((float) foot_y - enemy.y);
-            cross    = f > 0.0f && f < 1.0f && yc >= (float) babel_wall[t].y[0] - 0.5f &&
-                    yc <= (float) babel_wall[t].y[n - 1] + 0.5f;
-        }
-        int ok    = n > 0 && closer && cross;
-        if (n > 0) {
-            evt_log(NULL, "bot_babel",
-                    "action=wall_plan team=%d foot=%d,%d tent=%.0f,%.0f enemy_tent=%.0f,%.0f from=%d,%d to=%d,%d "
-                    "columns=%d faces=enemy closer=%d cross=%d ok=%d",
-                    t, foot_x, foot_y, tent.x, tent.y, enemy.x, enemy.y, wx, babel_wall[t].y[0], wx,
-                    babel_wall[t].y[n - 1], n, closer, cross, ok);
-        } else {
-            evt_log(NULL, "bot_babel",
-                    "action=wall_plan team=%d foot=%d,%d tent=%.0f,%.0f enemy_tent=%.0f,%.0f from=%d,%d to=%d,%d "
-                    "columns=0 faces=enemy closer=%d cross=%d ok=0",
-                    t, foot_x, foot_y, tent.x, tent.y, enemy.x, enemy.y, wx, start, wx, end, closer, cross);
-        }
-        LOG_INFO("Babel wall for team %d: %d columns at x %d, y %d-%d, facing the enemy at x %.0f", t, n, wx, start,
-                 end, enemy.x);
+        babel_wall[t].two = two;
+        /* the holders' line lies between our tent and the front wall, the front toward the enemy */
+        int faces = ((float) xd - tent.x) * (float) edir > 0.0f && (enemy.x - (float) wx) * (float) edir > 0.0f;
+        evt_log(NULL, "bot_babel",
+                "action=wall_plan team=%d line=%d,%d front=%d holders=%d shift=%d columns=%d cells=%d ramps=%d "
+                "tent=%.0f,%.0f enemy_tent=%.0f,%.0f faces_enemy=%d two_stories=%d ok=1",
+                t, wx, ys, wx, xd, shift, n, babel_wall[t].ncell, babel_wall[t].ramps, tent.x, tent.y, enemy.x,
+                enemy.y, faces, two);
+        LOG_INFO("Babel wall for team %d: %d columns, two stories, front at x %d on the slab's edge line x %d, y %d-%d, "
+                 "%d cells, %d ramps, facing the enemy at x %.0f",
+                 t, n, wx, xd, ys, ye, babel_wall[t].ncell, babel_wall[t].ramps, enemy.x);
     }
 }
 
@@ -2948,40 +3107,44 @@ static int _babel_stair_cells(server_t* server, int t, babel_cell_t* cells, int 
 }
 
 /* the wall's missing cells: what a waller can put now (a solid face, since
-   the server refuses a floating block), the bottom row first, then the row
-   over it; a window column's top cell is never on the list (a dug one is) */
+   the server refuses a floating block), lowest row first; a window's eye
+   cells are never on the list (a dug one is). The upper rows wait for the
+   deck under their column: the builder stands on it */
 typedef struct
 {
-    int x, y, z, column;
+    int x, y, z, column, kind, row;
 } babel_wall_cell_t;
 
 static int _babel_wall_cells(server_t* server, int t, babel_wall_cell_t* cells, int max)
 {
     map_store_t* map = &server->s_map.map;
-    int       n   = 0;
-    for (int row = 0; row < BABEL_WALL_HIGH && n < max; row++) {
-        for (int i = 0; i < babel_wall[t].n && n < max; i++) {
-            if (babel_wall[t].window[i] && row == BABEL_WALL_HIGH - 1) {
-                continue;
-            }
-            int cx = babel_wall[t].x, cy = babel_wall[t].y[i], cz = babel_wall[t].ground[i] - 1 - row;
-            if (cz < 1 || map_solid(map, (uint16_t) cx, (uint16_t) cy, (uint16_t) cz) ||
-                !gamemode_cell_editable(server, cx, cy, cz))
+    int          n   = 0;
+    for (int k = 0; k < babel_wall[t].ncell && n < max; k++) {
+        const babel_wcell_t* c = &babel_wall[t].cell[k];
+        if (map_solid(map, (uint16_t) c->x, (uint16_t) c->y, (uint16_t) c->z) ||
+            !gamemode_cell_editable(server, c->x, c->y, c->z))
+        {
+            continue;
+        }
+        if (c->kind == 0 && c->row > BABEL_WALL_DECK) {
+            int col = c->column;
+            if (!map_solid(map, (uint16_t) babel_wall[t].xd, (uint16_t) c->y,
+                           (uint16_t) (babel_wall[t].ground[col] - 1 - BABEL_WALL_DECK)))
             {
                 continue;
             }
-            int touch =
-                map_solid(map, (uint16_t) (cx + 1), (uint16_t) cy, (uint16_t) cz) ||
-                map_solid(map, (uint16_t) (cx - 1), (uint16_t) cy, (uint16_t) cz) ||
-                map_solid(map, (uint16_t) cx, (uint16_t) (cy + 1), (uint16_t) cz) ||
-                map_solid(map, (uint16_t) cx, (uint16_t) (cy - 1), (uint16_t) cz) ||
-                map_solid(map, (uint16_t) cx, (uint16_t) cy, (uint16_t) (cz + 1)) ||
-                (cz > 0 && map_solid(map, (uint16_t) cx, (uint16_t) cy, (uint16_t) (cz - 1)));
-            if (!touch) {
-                continue;
-            }
-            cells[n++] = (babel_wall_cell_t) {cx, cy, cz, i};
         }
+        int touch =
+            map_solid(map, (uint16_t) (c->x + 1), (uint16_t) c->y, (uint16_t) c->z) ||
+            map_solid(map, (uint16_t) (c->x - 1), (uint16_t) c->y, (uint16_t) c->z) ||
+            map_solid(map, (uint16_t) c->x, (uint16_t) (c->y + 1), (uint16_t) c->z) ||
+            map_solid(map, (uint16_t) c->x, (uint16_t) (c->y - 1), (uint16_t) c->z) ||
+            map_solid(map, (uint16_t) c->x, (uint16_t) c->y, (uint16_t) (c->z + 1)) ||
+            (c->z > 0 && map_solid(map, (uint16_t) c->x, (uint16_t) c->y, (uint16_t) (c->z - 1)));
+        if (!touch) {
+            continue;
+        }
+        cells[n++] = (babel_wall_cell_t) {c->x, c->y, c->z, c->column, c->kind, c->row};
     }
     return n;
 }
@@ -2990,19 +3153,31 @@ static int _babel_wall_cells(server_t* server, int t, babel_wall_cell_t* cells, 
    list, a dug out window cell is) */
 static int _babel_wall_whole(server_t* server, int t)
 {
-    babel_wall_cell_t cells[BABEL_WALL_LEN * BABEL_WALL_HIGH];
-    return babel_wall[t].n == 0 || _babel_wall_cells(server, t, cells, BABEL_WALL_LEN * BABEL_WALL_HIGH) == 0;
+    babel_wall_cell_t cells[BABEL_WALL_CELLS];
+    return babel_wall[t].n == 0 || _babel_wall_cells(server, t, cells, BABEL_WALL_CELLS) == 0;
+}
+
+/* the cells built of the cells planned, for the log and for "whole" */
+static void _babel_wall_progress(server_t* server, int t, int* built, int* total)
+{
+    *built = *total = 0;
+    for (int k = 0; k < babel_wall[t].ncell; k++) {
+        const babel_wcell_t* c = &babel_wall[t].cell[k];
+        (*total)++;
+        *built += map_solid(&server->s_map.map, (uint16_t) c->x, (uint16_t) c->y, (uint16_t) c->z);
+    }
 }
 
 /* an enemy on the ground within BABEL_WALL_ALERT of the wall: only then is
-   a window worth holding. Holding one all match from a whole wall fired no
-   shot on Nine-Eye, whose fight is on the slab and under it, 20+ blocks from
-   the foot (the wallers now go with the crew, and come back for this) */
+   a window worth holding while the staircase is still going up. Holding
+   one all match from a whole wall fired no shot on Nine-Eye, whose fight
+   is on the slab and under it (the wallers now go with the crew, and come
+   back for this) */
 #define BABEL_WALL_ALERT 40.0f
 
 static int _babel_wall_enemy_near(server_t* server, player_t* bot, int t)
 {
-    float     wx = babel_wall[t].x + 0.5f, wy = babel_stair[t].y0 + 1.0f;
+    float     wx = babel_wall[t].x + 0.5f, wy = BABEL_WALL_Y0 + BABEL_WALL_LEN * 0.5f;
     player_t *p, *tmp;
     HASH_ITER(hh, server->players, p, tmp)
     {
@@ -3019,33 +3194,33 @@ static int _babel_wall_enemy_near(server_t* server, player_t* bot, int t)
     return 0;
 }
 
-/* where the bot behind the wall stands to put cell y (or hold its window):
-   our side of the line, at that y, and ±1 or ±2 when a staircase step hangs
-   right over it. A wall cell under a step at the staircase's own lanes left
-   the bot standing on the step above, 7 cells from the block: the server
-   refused every placement (distance 4) and the wall stopped at 9 cells */
-static int _babel_wall_stand(server_t* server, int t, int yy, int* sx, int* sy, int* sg)
+/* where the bot stands to put the cell of column `col` (or hold its window):
+   on the holders' line, at that column's y, or a column or two over when the
+   place is no floor (the ground there is a lake). On the ground (`upper` 0)
+   or on the deck over it (`upper` 1: z = the front's ground - 4, once the
+   deck cell stands). The ground is the plan's, never the map's top: the deck
+   is solid over the holders' column */
+static int _babel_wall_stand(server_t* server, int t, int col, int upper, int* sx, int* sy, int* sg)
 {
     map_store_t* map = &server->s_map.map;
-    int       x   = babel_wall[t].x - babel_wall[t].dir;
     for (int d = 0; d <= 2; d++) {
         for (int s = 0; s < (d == 0 ? 1 : 2); s++) {
-            int y = yy + (d == 0 ? 0 : (s ? -d : d));
-            if (y < 0 || y >= map->size_y) {
+            int i = col + (d == 0 ? 0 : (s ? -d : d));
+            if (i < 0 || i >= babel_wall[t].n) {
                 continue;
             }
-            int g = map_top(map, (uint16_t) x, (uint16_t) y);
-            if (g >= map->size_z - 1 || g <= BABEL_WALL_HIGH) {
-                continue;
+            int y = babel_wall[t].y[i];
+            if (upper) {
+                int z = babel_wall[t].ground[i] - 1 - BABEL_WALL_DECK;
+                if (!map_solid(map, (uint16_t) babel_wall[t].xd, (uint16_t) y, (uint16_t) z)) {
+                    continue;
+                }
+                *sg = z;
+            } else {
+                *sg = babel_wall[t].ground_d[i];
             }
-            /* the ground itself: a step above it is no stand (the bot would
-               stand on the step, out of the block's reach) */
-            if (_babel_wall_on_stair(t, x, y, g)) {
-                continue;
-            }
-            *sx = x;
+            *sx = babel_wall[t].xd;
             *sy = y;
-            *sg = g;
             return 1;
         }
     }
@@ -3053,20 +3228,21 @@ static int _babel_wall_stand(server_t* server, int t, int yy, int* sx, int* sy, 
 }
 
 /* a waller's part of the goal: its share of the missing cells, out of blocks
-   the tent, and once the wall is whole a window to hold behind it */
+   the tent, and once the wall is whole a window to hold behind it: the
+   lower story's or, from the deck, the upper's */
 static int _babel_wall_goal(server_t* server, player_t* bot, gm_bot_goal_t* out, int t, int wall_rank)
 {
     if (babel_wall[t].n == 0) {
         return 0;
     }
     map_store_t* map = &server->s_map.map;
-    int       dir = babel_wall[t].dir, wx = babel_wall[t].x;
+    int          dir = babel_wall[t].dir, wx = babel_wall[t].x;
     /* the team defends the wall as it does the staircase's foot */
     out->has_guard = 1;
     out->guard_x   = babel_stair[t].x[0] + 0.5f;
     out->guard_y   = babel_stair[t].y0 + 1.0f;
-    babel_wall_cell_t cells[BABEL_WALL_LEN * BABEL_WALL_HIGH];
-    int               ncells = _babel_wall_cells(server, t, cells, BABEL_WALL_LEN * BABEL_WALL_HIGH);
+    babel_wall_cell_t cells[BABEL_WALL_CELLS];
+    int               ncells = _babel_wall_cells(server, t, cells, BABEL_WALL_CELLS);
     if (ncells > 0) {
         const babel_wall_cell_t* c = &cells[wall_rank % ncells];
         if (bot->blocks == 0) {
@@ -3080,15 +3256,29 @@ static int _babel_wall_goal(server_t* server, player_t* bot, gm_bot_goal_t* out,
             out->walk_only = out->keep_terrain = 1;
             return 1;
         }
-        /* behind the wall, in the cell's own column: the block in reach */
+        /* behind the wall in the cell's own column: the ground for the lower
+           rows, the ramps and the deck itself, the deck for the rows over it
+           (the block is in reach there) */
+        int upper = c->kind == 0 && c->row > BABEL_WALL_DECK;
         int sx, sy, sg;
-        if (!_babel_wall_stand(server, t, c->y, &sx, &sy, &sg)) {
+        if (!_babel_wall_stand(server, t, c->column, upper, &sx, &sy, &sg)) {
             return 0;
+        }
+        if (c->kind == 2) {
+            /* a ramp's column is its own: stand on the ground beside it, one
+               column further back from the wall */
+            sx = babel_wall[t].xd - dir;
+            sg = _babel_wall_top(server, sx, c->y);
+            sy = c->y;
+            if (sg >= map->size_z - 1) {
+                return 0;
+            }
         }
         if (bot->alive && get_nanos() - babel_wall_log_at[bot->id] > 5ULL * NANO_IN_SECOND) {
             babel_wall_log_at[bot->id] = get_nanos();
-            evt_log(bot, "bot_babel", "action=assign role=wall cell=%d,%d,%d stand=%d,%d wall=%d of %d cells",
-                    c->x, c->y, c->z, sx, sy, babel_wall[t].n, ncells);
+            evt_log(bot, "bot_babel",
+                    "action=assign role=wall cell=%d,%d,%d kind=%d row=%d stand=%d,%d,%d wall=%d of %d cells", c->x,
+                    c->y, c->z, c->kind, c->row, sx, sy, sg, babel_wall[t].n, ncells);
         }
         gm_goal_name(out, "babel-wall", 0);
         out->x         = sx + 0.5f;
@@ -3102,16 +3292,21 @@ static int _babel_wall_goal(server_t* server, player_t* bot, gm_bot_goal_t* out,
         out->work_z    = c->z;
         /* the colour of the ground it stands on: a dug one is the current top */
         int gc = babel_wall[t].ground[c->column];
-        if (!map_solid(map, (uint16_t) c->x, (uint16_t) c->y, (uint16_t) gc)) {
-            gc = map_top(map, (uint16_t) c->x, (uint16_t) c->y);
+        if (!map_solid(map, (uint16_t) wx, (uint16_t) babel_wall[t].y[c->column], (uint16_t) gc)) {
+            gc = _babel_wall_top(server, wx, babel_wall[t].y[c->column]);
         }
-        out->work_color = map_color(map, (uint16_t) c->x, (uint16_t) c->y, (uint16_t) gc);
+        out->work_color = map_color(map, (uint16_t) wx, (uint16_t) babel_wall[t].y[c->column], (uint16_t) gc);
         return 1;
     }
-    /* whole: a window of its own, looking out of it, but only while an enemy
-       is coming over the ground at the wall; with none there the waller
-       joins the crew, or hunts (_babel_role_goal) */
-    if (!_babel_wall_enemy_near(server, bot, t)) {
+    /* whole: a window of its own, looking out of it. While the staircase is
+       still going up the waller helps the crew unless an enemy is coming over
+       the ground at the wall; once it is whole the wallers stay behind the
+       wall for good. They used to leave the moment the wall was whole and
+       came back only for an enemy within BABEL_WALL_ALERT of it, which never
+       happened on Nine-Eye (0 windows held in 4 matches): the wall stood
+       empty, so nobody ever saw bots behind it. The ranks alternate between
+       the two stories (the upper's from the deck) when a ramp leads up */
+    if (!_babel_stair_whole(server, t) && !_babel_wall_enemy_near(server, bot, t)) {
         return 0;
     }
     int windows[BABEL_WALL_LEN], nw = 0;
@@ -3123,20 +3318,23 @@ static int _babel_wall_goal(server_t* server, player_t* bot, gm_bot_goal_t* out,
     if (nw == 0) {
         return 0;
     }
-    int i  = windows[wall_rank % nw];
-    int sx = wx - dir, sy, sg;
-    int wy = babel_wall[t].y[i];
-    if (!_babel_wall_stand(server, t, wy, &sx, &sy, &sg)) {
+    int upper = babel_wall[t].two && (wall_rank & 1);
+    int i     = windows[(wall_rank / 2) % nw];
+    int sx, sy, sg;
+    if (!_babel_wall_stand(server, t, i, upper, &sx, &sy, &sg)) {
         return 0;
     }
-    if (bot->alive && babel_window_held[bot->id] != wy) {
-        babel_window_held[bot->id] = wy;
-        evt_log(bot, "bot_babel", "action=window y=%d stand=%d,%d wall=%d", wy, sx, sy, babel_wall[t].n);
+    int wy = sy;
+    if (bot->alive && babel_window_held[bot->id] != wy + (upper ? 1000 : 0)) {
+        babel_window_held[bot->id] = wy + (upper ? 1000 : 0);
+        evt_log(bot, "bot_babel", "action=window y=%d stand=%d,%d story=%d wall=%d", wy, sx, sy, upper ? 2 : 1,
+                babel_wall[t].n);
     }
     gm_goal_name(out, "babel-window", GM_INTENT_POST);
     out->x         = sx + 0.5f;
     out->y         = sy + 0.5f;
     out->z         = (float) sg;
+    out->exact     = 1;
     out->hold      = 1.5f;
     out->watch_x   = wx + dir * 20.0f + 0.5f;
     out->watch_y   = wy + 0.5f;
@@ -3360,6 +3558,97 @@ static int _babel_hunt_unreachable(player_t* p)
     return 0;
 }
 
+/* The ground bots' half moon (the CTF lanes and gamemode_flank do the same on
+   their maps): a hunter or a flanker bound for a far point first bows out to
+   the map's north or south side, 90 to 160 blocks off the middle line, so the
+   enemy meets bots along the map's edges and not only in front of the
+   staircase. Once per life: the waypoint is dropped at the bot's death,
+   when it is reached, or when the bot is already close to its goal */
+static struct
+{
+    uint8_t stage; /* 0 not drawn, 1 on its way to wx,wy, 2 done */
+    float   wx, wy, wz;
+} babel_flank[256];
+
+static void _babel_flank_bow(server_t* server, player_t* bot, gm_bot_goal_t* out)
+{
+    map_store_t* map = &server->s_map.map;
+    if (!bot->alive) {
+        babel_flank[bot->id].stage = 0;
+        return;
+    }
+    float bx = bot->movement.position.x, by = bot->movement.position.y;
+    float dx = out->x - bx, dy = out->y - by;
+    float d  = sqrtf(dx * dx + dy * dy);
+    if (babel_flank[bot->id].stage == 0) {
+        if (d < 90.0f) {
+            babel_flank[bot->id].stage = 2; /* close already: straight at it */
+            return;
+        }
+        /* a waypoint in the lake was a death: Nine-Eye is two islands in a
+           sea, and a plan to a spot in the water came back partial and ended
+           in it (117 falls in four matches). Only a spot with dry ground all
+           round it (5 x 5) and a dry straight line to it from the bot counts;
+           the widest bow on the bot's side first, then the other's, at 12%
+           and 25% of the way to the goal (the middle of Nine-Eye is sea) */
+        float side  = (bot->id & 1) ? 1.0f : -1.0f;
+        int   found = 0;
+        float fx = 0.0f, fy = 0.0f;
+        for (int s = 0; s < 2 && !found; s++) {
+            for (int fi = 0; fi < 2 && !found; fi++) {
+                float wxm = bx + dx * (fi ? 0.25f : 0.12f);
+                for (float off = 170.0f; off >= 25.0f && !found; off -= 10.0f) {
+                    float cy = (float) map->size_y * 0.5f + (s ? -side : side) * off;
+                    if (cy < 12.0f || cy > (float) map->size_y - 12.0f || wxm < 12.0f ||
+                        wxm > (float) map->size_x - 12.0f)
+                    {
+                        continue;
+                    }
+                    int dry = 1;
+                    for (int ox = -2; ox <= 2 && dry; ox++) {
+                        for (int oy = -2; oy <= 2 && dry; oy++) {
+                            int tp = map_top(map, (uint16_t) (wxm + (float) ox), (uint16_t) (cy + (float) oy));
+                            dry    = tp > 4 && tp < map->size_z - 1;
+                        }
+                    }
+                    float lx = wxm - bx, ly = cy - by, ll = sqrtf(lx * lx + ly * ly);
+                    for (float k = 4.0f; k < ll && dry; k += 4.0f) {
+                        int tp = map_top(map, (uint16_t) (bx + lx * k / ll), (uint16_t) (by + ly * k / ll));
+                        dry    = tp > 4 && tp < map->size_z - 1;
+                    }
+                    if (dry) {
+                        found = 1;
+                        fx    = wxm;
+                        fy    = cy;
+                    }
+                }
+            }
+        }
+        if (!found) {
+            babel_flank[bot->id].stage = 2;
+            evt_log(bot, "bot_babel", "action=flank phase=none goal=%.0f,%.0f", out->x, out->y);
+            return;
+        }
+        babel_flank[bot->id].wx    = fx;
+        babel_flank[bot->id].wy    = fy;
+        babel_flank[bot->id].wz    = (float) map_top(map, (uint16_t) fx, (uint16_t) fy);
+        babel_flank[bot->id].stage = 1;
+        evt_log(bot, "bot_babel", "action=flank phase=plan wp=%.0f,%.0f goal=%.0f,%.0f", fx, fy, out->x, out->y);
+    }
+    if (babel_flank[bot->id].stage == 1) {
+        float wx = babel_flank[bot->id].wx - bx, wy = babel_flank[bot->id].wy - by;
+        if (wx * wx + wy * wy < 14.0f * 14.0f || d < 70.0f) {
+            babel_flank[bot->id].stage = 2;
+            evt_log(bot, "bot_babel", "action=flank phase=pass at=%.0f,%.0f", bx, by);
+            return;
+        }
+        out->x     = babel_flank[bot->id].wx;
+        out->y     = babel_flank[bot->id].wy;
+        out->z     = babel_flank[bot->id].wz;
+        out->exact = 0;
+    }
+}
+
 /* a hunter's goal: the nearest enemy on the ground it can reach on foot.
    The slab is no place for a hunter: under it is Nine-Eye's lake (the plans
    know it is deadly water), and one up there, a carrier or a camper, is not
@@ -3393,8 +3682,8 @@ static int _babel_hunt_goal(server_t* server, player_t* bot, gm_bot_goal_t* out,
     } else {
         int e = 1 - t;
         if (babel_stair[e].len > 0) {
-            /* out past the enemy's wall, on their side of the foot */
-            int foot = babel_stair[e].x[babel_stair[e].len - 1] + babel_stair[e].dir * (BABEL_WALL_OUT + 2);
+            /* out on their side of the foot, where their crew climbs from */
+            int foot = babel_stair[e].x[babel_stair[e].len - 1] + babel_stair[e].dir * BABEL_FOOT_OUT;
             vector3f_t at = _ctf_land_near(server, (float) foot + 0.5f, (float) babel_stair[e].y0 + 1.5f);
             gx = at.x;
             gy = at.y;
@@ -3412,6 +3701,7 @@ static int _babel_hunt_goal(server_t* server, player_t* bot, gm_bot_goal_t* out,
     out->x    = gx;
     out->y    = gy;
     out->z    = gz;
+    _babel_flank_bow(server, bot, out);
     return 1;
 }
 
@@ -3460,7 +3750,16 @@ static int _babel_role_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
             return 1;
         }
     } else if (role != BABEL_ROLE_HUNT) {
-        return 0;
+        /* with the staircase whole one crew bot in three that is still on the
+           ground goes out as a flanker too (never the breaker, the crew's
+           last rank): a team of 8 has 2 on the ground's half moon, the rest
+           climb to the slab */
+        int crew_rank = rank - wall_n - hunt_n;
+        if (!(babel_stair[t].len > 0 && crew_n >= 4 && crew_rank % 3 == 2 && crew_rank != crew_n - 1 &&
+              _babel_stair_whole(server, t)))
+        {
+            return 0;
+        }
     }
     /* GM_BOT_RUSH is the core's run and gun (the field `rush` is the
        carrier's: it walks past fights). They shoot on the move and never
@@ -3473,6 +3772,72 @@ static int _babel_role_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
     out->walk_only    = 1;
     out->keep_terrain = 1;
     return 1;
+}
+
+/* Up on the platform a bot holds the edge over the ground and shoots at the
+   enemies walking below, throwing grenades at them (gm_bot_goal_t.plunge),
+   instead of escorting the carrier: the carrier comes home alone and the
+   bots on the slab are worth more up there, 40 blocks over the enemy. The
+   edge is the nearest point of the slab to the closest enemy on the ground
+   within 70 blocks, else the side the enemy's base is on; each bot a place of
+   its own along it by id, and the point on a 6 block grid so a walking enemy
+   does not make the goal move every think (a goal that moves re-plans) */
+#define BABEL_SLAB_REACH 70.0f
+
+static void _babel_slab_goal(server_t* server, player_t* bot, gm_bot_goal_t* out, int t)
+{
+    player_t *p, *tmp, *best = NULL;
+    float     best_d = BABEL_SLAB_REACH * BABEL_SLAB_REACH;
+    HASH_ITER(hh, server->players, p, tmp)
+    {
+        if (p->team == bot->team || (p->team != TEAM_A && p->team != TEAM_B) || p->state != STATE_READY ||
+            !p->alive || p->movement.position.z < 4.0f)
+        {
+            continue;
+        }
+        float px = fminf(fmaxf(p->movement.position.x, 207.5f), 304.5f);
+        float py = fminf(fmaxf(p->movement.position.y, 241.5f), 270.5f);
+        float dx = p->movement.position.x - px, dy = p->movement.position.y - py;
+        if (dx * dx + dy * dy < best_d) {
+            best_d = dx * dx + dy * dy;
+            best   = p;
+        }
+    }
+    float tx, ty, wx, wy;
+    if (best != NULL) {
+        tx = best->movement.position.x;
+        ty = best->movement.position.y;
+        wx = tx;
+        wy = ty;
+    } else {
+        int east = server->protocol.gamemode.base[1 - t].x >= 256.0f;
+        tx = east ? 304.5f : 207.5f;
+        ty = 256.0f;
+        wx = east ? 340.0f : 170.0f;
+        wy = ty;
+    }
+    float spread = (float) ((int) (bot->id % 5) - 2) * 2.5f;
+    tx = floorf((tx + spread) / 6.0f) * 6.0f + 0.5f;
+    ty = floorf((ty + spread) / 6.0f) * 6.0f + 0.5f;
+    tx = fminf(fmaxf(tx, 207.5f), 304.5f);
+    ty = fminf(fmaxf(ty, 241.5f), 270.5f);
+    static uint64_t logged_at[256];
+    if (bot->alive && get_nanos() - logged_at[bot->id] > 5ULL * NANO_IN_SECOND) {
+        logged_at[bot->id] = get_nanos();
+        evt_log(bot, "bot_babel", "action=slab_hold at=%.0f,%.0f enemy=%s dist=%.0f", tx, ty,
+                best != NULL ? "ground" : "none", best != NULL ? sqrtf(best_d) : 0.0f);
+    }
+    gm_goal_name(out, "slab-hold", 0);
+    out->x         = tx;
+    out->y         = ty;
+    out->z         = 1.0f;
+    out->exact     = 0;
+    out->hold      = 1.5f;
+    out->watch_x   = wx;
+    out->watch_y   = wy;
+    out->plunge    = 1;
+    out->walk_only = out->keep_terrain = 1; /* the slab is nobody's to dig */
+    out->rush = out->assault = 0;
 }
 
 /* up on the slab, a pillar or the staircase: a bot there finishes the way
@@ -3509,7 +3874,7 @@ static int _babel_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
             int fx = babel_stair[t].x[babel_stair[t].len - 1];
             int d  = ((int) bot->movement.position.x - fx) * babel_wall[t].dir;
             int cy = (int) bot->movement.position.y;
-            if (d >= 0 && d <= BABEL_WALL_OUT && (cy == babel_stair[t].y0 || cy == babel_stair[t].y0 + 1)) {
+            if (d >= 0 && d <= BABEL_FOOT_NEAR && (cy == babel_stair[t].y0 || cy == babel_stair[t].y0 + 1)) {
                 high = 0;
             }
         }
@@ -3519,6 +3884,22 @@ static int _babel_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
     }
     if (!_ctf_bot_goal(server, bot, out)) {
         return 0;
+    }
+    /* No escort in Babel: a teammate with the enemy intel is not followed.
+       Bots up on the slab (or on their way up it) hold its edge and shoot
+       and throw grenades at the ground below; the ones on the ground go out
+       on the half moon like the hunters, to kill the enemies along the
+       map's edges */
+    if (out->name != NULL && !strcmp(out->name, "escort") && !bot->has_intel) {
+        int t = bot->team == TEAM_A ? 0 : 1;
+        if (high) {
+            _babel_slab_goal(server, bot, out, t);
+        } else {
+            _babel_hunt_goal(server, bot, out, t);
+            out->role         = GM_BOT_RUSH;
+            out->walk_only    = 1;
+            out->keep_terrain = 1;
+        }
     }
     /* a carrier on the far side of the tower, hunted from the ground: the
        way across is under the slab, which on Nine-Eye is a lake (16 hunters
@@ -3717,10 +4098,41 @@ const gamemode_ops_t ctf_ops = {
 /* the staircases' and the walls' progress, every 10 s, and the moment each is
    first whole: cells built of the cells planned (a step and its support per
    lane; the wall's 3-high columns less their windows) */
+static void _babel_slab_audit(server_t* server)
+{
+    static uint64_t audit_at;
+    uint64_t        now = get_nanos();
+    if (now - audit_at < NANO_IN_SECOND) {
+        return;
+    }
+    audit_at = now;
+    color_t platformColor;
+    platformColor.raw = map_meta_babel_color(server, 0xFF00FFFF);
+    int missing = 0;
+    for (int x = 206; x <= 306; ++x) {
+        for (int y = 240; y <= 272; ++y) {
+            if (map_solid(&server->s_map.map, x, y, 1)) {
+                continue;
+            }
+            /* nothing may break the slab (_babel_cell_protected, and check_node
+               holds a structure with a protected cell), so a hole here is a
+               bug: say so, and put the cell back rather than leave the
+               tower's platform short of its floor */
+            missing++;
+            map_set_color(&server->s_map.map, x, y, 1, platformColor.raw);
+            proto10_world_cell(server, x, y, 1, P10_WORLD_CAUSE_NONE);
+        }
+    }
+    if (missing > 0) {
+        evt_log(NULL, "babel", "action=slab_collapse missing=%d restored=1", missing);
+    }
+}
+
 static void _babel_tick(server_t* server)
 {
     static uint64_t logged_at;
     uint64_t        now = get_nanos();
+    _babel_slab_audit(server);
     int             built[2] = {0, 0}, total[2] = {0, 0};
     int             wbuilt[2] = {0, 0}, wtotal[2] = {0, 0};
     for (int t = 0; t < 2; t++) {
@@ -3741,17 +4153,7 @@ static void _babel_tick(server_t* server)
             LOG_INFO("Babel staircase of team %d whole after %.0f s (%d cells)", t,
                      (double) (now - babel_started) / NANO_IN_SECOND, total[t]);
         }
-        for (int i = 0; i < babel_wall[t].n; i++) {
-            for (int row = 0; row < BABEL_WALL_HIGH; row++) {
-                if (babel_wall[t].window[i] && row == BABEL_WALL_HIGH - 1) {
-                    continue; /* the loophole is left open */
-                }
-                int cz = babel_wall[t].ground[i] - 1 - row;
-                wtotal[t]++;
-                wbuilt[t] += map_solid(&server->s_map.map, (uint16_t) babel_wall[t].x,
-                                             (uint16_t) babel_wall[t].y[i], (uint16_t) cz);
-            }
-        }
+        _babel_wall_progress(server, t, &wbuilt[t], &wtotal[t]);
         if (wtotal[t] > 0 && wbuilt[t] == wtotal[t] && babel_wall_whole_at[t] == 0) {
             babel_wall_whole_at[t] = now;
             LOG_INFO("Babel wall of team %d whole after %.0f s (%d cells)", t,
@@ -3805,6 +4207,7 @@ const gamemode_ops_t babel_ops = {
 .player_out      = _ctf_player_out,
 .terrain_changed = _ctf_terrain_changed,
 .cell_protected  = _babel_cell_protected,
+.cell_protect_why = _babel_cell_why,
 .state_keys      = _ctf_state_keys,
 .summary_stat    = "captures",
 .player_stat     = _ctf_player_captures,
