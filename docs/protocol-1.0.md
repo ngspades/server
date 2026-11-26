@@ -2832,8 +2832,9 @@ whose value turns empty is not sent, and a client would keep the old one).
   back (`TerrainUpdate` both ways).
 - The dropped bomb: `ptb-bomb-at` says where it lies; a team 2 player within
   1.6 blocks picks it up.
-- **Halftime**: after round `halftime_round` (by default `rounds_to_win - 1`,
-  half the longest match) every player changes side with no death (its
+- **Halftime**: after round `halftime_round` (by default `rounds_to_win - 1`:
+  with the default 16 rounds to win, after round 15 of at most 30, as in
+  Counter-Strike: Global Offensive) every player changes side with no death (its
   PlayerUpdate's team changes), the two team scores swap places (the rounds
   won stay with the people: team 1 is always the defenders' side, its name
   and colour), `ptb-swap` is sent to everyone, and the next freeze respawns

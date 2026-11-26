@@ -210,20 +210,38 @@ are the ones the client uses to name players (`common/names/names.h`).
   in front of the enemy's staircase's foot, and it keeps at it once the
   staircase is whole. The wallers' last rank is the guard, at the foot of
   our staircase while it is not whole. A waller raises its team's wall, then
-  joins the crew, and hunts with them once the staircase is whole; it comes
-  back to put a missing cell back, and stands behind a window only while an
-  enemy comes over the ground at the wall.
-- **Babel's wall.** One per team, 20 columns between its staircase's foot
-  and the enemy: 5 columns from the foot toward the enemy's tent, across the
-  ground the enemy comes over, covering the foot's lanes and the tent's side.
-  It used to stand 5 columns outward of the foot, behind the staircase, where
-  it shielded nothing the enemy crossed. Three blocks high from the ground it
-  stands on, with every third column's top block left out as a window at
-  shooting height, facing the enemy. The wallers share the missing cells,
-  stand behind the wall beside a step's column (or beside that, where a
-  staircase step hangs over it), restock at the tent when out of blocks, and
-  put back a cell that was shot or dug out. Built it is whole 26 to 70 s after
-  the bots start.
+  helps the crew until the staircase is whole (unless an enemy is coming at
+  the wall), and from then on stays behind a window of its wall for good,
+  shooting through it; it comes back to put a missing cell back. (They used
+  to leave the moment the wall was whole and came back only for an enemy
+  within 40 blocks of it, which never happened: the wall stood empty.)
+- **Babel's half moon and the slab.** Nobody escorts the carrier. The ground
+  bots, the hunters and, once the staircase is whole, one crew bot in three
+  (not the breaker), first bow out to the north or south of the map: a
+  waypoint with dry ground round it and a dry line to it, the widest bow on
+  their side first (Nine-Eye is two islands in a sea, so it is a modest bow
+  there), then go on to the enemy's foot like any hunter. Bots on the slab
+  (or climbing to it) with a teammate carrying hold the slab's edge nearest
+  the closest enemy on the ground within 70 blocks (else the edge facing the
+  enemy's base), shoot down at it and throw grenades at one in plain sight
+  at least 10 blocks below (the goal's `plunge`: normally a grenade is
+  thrown only at an enemy that ducked out of sight or at two together).
+- **Babel's wall.** One per team, two stories high, on the platform's own
+  line: it runs along the slab's edge (x 206 for the west team, 306 for the
+  east) over the pillars' ladders and the staircase's lanes, 29 columns, with
+  its front wall one column toward the enemy and the pillars' strip behind
+  it, free. The lower story is three blocks high with every third column's
+  top block left out as a window at shooting height; over the lower holders'
+  heads a deck runs behind the wall and an upper parapet stands on it with
+  its own windows. A ramp of steps at an end takes a bot up to the deck. The
+  wallers share the missing cells, stand behind the wall (on the ground, and
+  on the deck for the upper rows), restock at the tent when out of blocks, and
+  put back a cell that was shot or dug out; once it is whole they hold the
+  windows of both stories. Where the ground at the platform's edge is water or
+  a cliff the line moves outward, and on a map where no bot can climb to the
+  deck it is one story. Built it is whole about 250 to 300 s after the bots
+  start on Nine-Eye (224 blocks). The platform itself can no longer be built
+  on or against, or broken, by anyone.
 - **Stuck.** When the plan fails or a step will not go through, the bot plans
   again and avoids that cell for a while. As a last resort it walks straight
   at the goal and clears the way.
@@ -410,6 +428,11 @@ the water level are the same rules a player meets.
   spread. The tick the same or lower; no crash, the 0.75 profile too.
 - **Licence:** the same as the bridges. BattleSpades is AGPL-3.0; this is
   our own implementation of the idea, no cell list and no code taken from it.
+
+Builders put a wall from behind it: they stand on the side of a cell away
+from the threat (the structure covers that side only) and do not place from
+the enemy's side while such a stand exists, so they no longer build a
+barricade and then stand in front of it.
 
 ## Helicopters
 
@@ -978,10 +1001,37 @@ crouched by the mode for the hold. Two terrorists escort it, the others take
 the site ahead of it; when the carrier dies the nearest terrorist fetches
 the dropped bomb. After the plant they hold a ring round the bomb. The
 counter-terrorists hold the two sites by rank, one in four rotating to the
-other at 35 s. After a plant they do not know where the bomb is: each goes
-to its nearer site, then the other, until it is within hearing (90 blocks);
-the nearest that hears it defuses when no terrorist is within 18 blocks of
-the bomb or the fuse is short, the others retake the site in the open.
+other at 35 s. After a plant they do not know where the bomb is (nothing
+announces the site; only a plant having happened is known): each goes to the
+nearest site the team has not cleared, until it is within hearing (90
+blocks). A defender standing on a site (within its radius + 4) while hearing
+no beep clears that site for the team (they call it out in team chat), so the
+ones guarding the wrong site leave for the other at once and nobody turns
+back to a site just left (`EVT ptb action=ct_rotate from= to= cleared=`; if
+both end up cleared they listen again). The nearest defender that hears the
+bomb defuses when no terrorist is within 18 blocks of it or the fuse is
+short; the others retake the site in the open.
+
+The defenders do not walk to a site in single file: from 55+ blocks away each
+takes a route by its rank among the living defenders, up to three: a staging
+point 25 to 40 blocks out, swung 66 degrees left or right of the line from the
+site to the bot (goal `ptb-approach`, reached or 30 s or within 30 blocks of
+the target), then the site; the third is the direct way, and a lone bot goes
+direct (`action=ct_route route=0|1|2 of= site= dist=`; searching and retaking
+both use it). `SP_PTB_CT_SPLIT=0` plays the old search for a baseline.
+
+Plant the Bomb plays Counter-Strike: Global Offensive's competitive rules
+(MR15, 5 v 5): a team holds 5 bots and people at most (the host's counts are
+brought down to it and a joining person takes a bot's place), 15 s freeze,
+1:55 rounds, 40 s fuse, 7 s between rounds, the sides swap after round 15,
+16 rounds win and 15-15 after round 30 is a draw. A grenade already thrown
+still kills after its thrower died, in every mode.
+`action=ct_arrive sector= secs= route= first=` logs a defender's first time
+within 25 blocks of the bomb (sector: bearing quarter, 0 east, 1 south, 2
+west, 3 north). 16 bots, 1500 s, 4 seeds, five maps, old / new: CT round wins
+88 / 124 of ~372, defuses 64 / 90 over the 20 matches, explosions fewer on
+dust2, cache, inferno; defenders reaching the bomb come in from
+1.42 / 1.73 quarters a round (share of rounds with two or more 40% / 62%).
 
 ## Asking bots for something
 
