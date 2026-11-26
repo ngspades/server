@@ -114,6 +114,7 @@ set(SERVER_HEADERS
     Gamemodes/NgCtf.h
     Gamemodes/Squads.h
     Gamemodes/Arena.h
+    Gamemodes/Ptb.h
     Ping.h
     ParseConvert.h
     Player.h
@@ -240,6 +241,7 @@ set(SERVER_SOURCES
     Gamemodes/Creative.c
     Gamemodes/Tdm.c
     Gamemodes/Koth.c
+    Gamemodes/Ptb.c
     Gamemodes/Tc.c
     Gamemodes/LuaMode.c
     Net/Conn.c

@@ -8,6 +8,7 @@
 #include <Server/Gamemodes/Creative.h>
 #include <Server/Gamemodes/Tdm.h>
 #include <Server/Gamemodes/Koth.h>
+#include <Server/Gamemodes/Ptb.h>
 #include <Server/Gamemodes/Tc.h>
 #include <Server/Proto10/Crates.h>
 #include <Server/Gamemodes/LuaMode.h>
@@ -54,6 +55,7 @@ static const gamemode_ops_t* const registry[] = {
 [GAME_MODE_CREATIVE] = &creative_ops,
 [GAME_MODE_TDM] = &tdm_ops,
 [GAME_MODE_KOTH] = &koth_ops,
+[GAME_MODE_PTB] = &ptb_ops,
 };
 
 #define REGISTRY_SIZE (sizeof(registry) / sizeof(registry[0]))

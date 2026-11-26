@@ -64,6 +64,14 @@ foreach(_cfg config config-075)
     string(MAKE_C_IDENTIFIER "default_${_cfg}" _name)
     string(APPEND _default_configs "static const char ${_name}[] = {${_hex}0x00};\n")
 endforeach()
+# Plant the Bomb's bombsites (Gamemodes/Ptb.c), built in too: a release, the
+# Docker image or the macOS app need not carry the file (one in Resources/
+# still wins, so a host can add its own maps)
+set(_src "${CMAKE_CURRENT_SOURCE_DIR}/Resources/ptb_sites.toml")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_src}")
+file(READ "${_src}" _hex HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," _hex "${_hex}")
+string(APPEND _default_configs "static const char default_ptb_sites[] = {${_hex}0x00};\n")
 file(WRITE "${CMAKE_BINARY_DIR}/generated/server_default_configs.h"
      "/* generated from Resources/config.toml and config-075.toml (CMakeLists.txt) */\n${_default_configs}")
 include_directories("${CMAKE_BINARY_DIR}/generated")

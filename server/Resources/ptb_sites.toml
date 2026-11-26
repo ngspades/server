@@ -1,0 +1,33 @@
+# Plant the Bomb's bombsites (Gamemodes/Ptb.c), by map folder name: the five
+# Counter-Strike bomb defusal maps of the mode's catalog, from the maps
+# repository, whose tomls a download replaces, so the sites are kept here
+# (built into the server too: a file here wins). A map's own toml [ptb]
+# sites win over this table; a map in neither gets two places between its
+# spawns.
+#
+# Each site: its name (A, B), the middle (x, y map columns), the floor block
+# under it (z, map z: 0 the top) and its radius in blocks (a planter within it
+# is on the site). Found with tools/find_bombsites.py (the painted marks of a
+# map, else the flat walkable floors between the spawns nearer the
+# defenders) and checked by eye on its top view: docs/ptb-sites.md.
+# Team 1 (the arena's blue spawn) defends; team 2 (green) plants.
+
+[De_Dust2_342]
+# the sprayed X of each site (#e05542): A east of the defenders, B west
+sites = [{name = "A", x = 307, y = 316, z = 55, radius = 7}, {name = "B", x = 205, y = 308, z = 52, radius = 7}]
+
+[de_cache]
+# the red X marks (#df0000): A down the east corridor, B by the red car
+sites = [{name = "A", x = 357, y = 354, z = 60, radius = 7}, {name = "B", x = 207, y = 351, z = 59, radius = 7}]
+
+[de_mirage]
+# beside the big yellow letters the author painted on each site
+sites = [{name = "A", x = 252, y = 210, z = 55, radius = 7}, {name = "B", x = 316, y = 298, z = 55, radius = 7}]
+
+[de_inferno]
+# A by the red X in the south east, B the north west square
+sites = [{name = "A", x = 306, y = 226, z = 55, radius = 7}, {name = "B", x = 228, y = 100, z = 54, radius = 7}]
+
+[de_train]
+# A among the trains of the yard, B on the ground by the defenders' side
+sites = [{name = "A", x = 240, y = 244, z = 58, radius = 8}, {name = "B", x = 268, y = 184, z = 58, radius = 7}]

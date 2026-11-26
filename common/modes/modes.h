@@ -24,7 +24,7 @@
 #define N_(s) s
 #endif
 
-#define GAME_MODES_COUNT 9
+#define GAME_MODES_COUNT 10
 #define GAME_MODE_MAPS 24 /* at most; a mode with fewer ends its list with NULL */
 
 /* the bots a team gets by default on a map: 10 where the bases are close,
@@ -159,6 +159,18 @@ static inline const struct game_mode_info* game_mode_get(int k) {
 		 {"csitaly", "de_dust", "de_cache", "avstorage", "indiaarena", "Titanic_Arena", "Abordage", "planeCrash",
 		  "facebattle", "Penthouse", "De_Dust2_342", "cs_assault"},
 		 {GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL},
+		 0},
+		/* Plant the Bomb: the Counter-Strike bomb defusal maps with a bomb A
+		   and a bomb B (the server's Resources/ptb_sites.toml,
+		   docs/ptb-sites.md), each by the maps repository's exact folder
+		   name (a name two folders answer to, de_dust2, is no alias the
+		   download finds): SIMOX's dust2 (the arena's, its sites sprayed),
+		   cache, mirage, inferno and train */
+		{"ptb",
+		 N_("Plant the Bomb"),
+		 10,
+		 {"De_Dust2_342", "de_cache", "de_mirage", "de_inferno", "de_train", NULL},
+		 {GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, GAME_MAP_BOTS_SMALL, 0},
 		 0},
 		{"zombie",
 		 N_("Zombies"),

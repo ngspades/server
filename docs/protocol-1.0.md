@@ -1879,6 +1879,13 @@ them, each within `int32`. Positions are **block cells** in map coordinates
 | `koth-on` | `a,b` | Koth: players of team 1 and team 2 on the hill |
 | `koth-points` | `a,b,limit` | Koth: this round's points of each team (a second held alone is a point) and the points that win the round. The team scores count rounds won, `capture-limit` the rounds that win the map |
 | `koth-winner` | `team1`, `team2` | Koth: who won the last round; absent before the first |
+| `ptb-bomb` | `none`, `carried`, `dropped`, `planted`, `defused`, `exploded` | Plant the Bomb (`mode` = `ptb`, its rounds use the `arena-*` keys; team 1 the counter-terrorists, team 2 the terrorists): the bomb (12.9) |
+| `ptb-carrier` | decimal | Plant the Bomb: the carrier's player id while carried, `-1` otherwise |
+| `ptb-bomb-at` | `x,y,z` | Plant the Bomb: the floor block the dropped bomb lies on; `-1,-1,-1` otherwise (never the planted bomb's: 12.9) |
+| `ptb-bomb-time`, `ptb-bomb-total` | decimal | Plant the Bomb: the planted bomb's whole seconds of fuse left (0 unplanted) and the fuse's length |
+| `ptb-planter`, `ptb-defuser` | decimal | Plant the Bomb: who is planting, who is defusing it, `-1` nobody (the holds' sounds on every client) |
+| `ptb-site-a`, `ptb-site-b` | `x,y,z,radius` | Plant the Bomb: each site's middle column, its floor block and its radius in blocks |
+| `ptb-why` | `eliminated`, `bomb`, `defuse`, `time`, `draw`, `-` | Plant the Bomb: how the last round ended, in the `end` state only |
 
 The server leaves out a key with nothing to say: an Arena match sends no
 intel, the other modes no `arena-*` key. Babel is sent as `ctf` (its intels
@@ -2782,6 +2789,54 @@ an MG that bot placed fired every 0.2 s at what its gunner looked at and
 stopped when it left. A 512 map spawns no helicopter (`EVT heli` absent).
 
 ---
+
+
+### 12.9 Plant the Bomb (mode `ptb`)
+
+Counter-Strike's bomb defusal on its de_* maps (the server's
+`Gamemodes/Ptb.c`, the client's `ptb.c`). The state is GameModeState's
+`arena-*` and `ptb-*` keys (12.2.3); their values are never empty (a key
+whose value turns empty is not sent, and a client would keep the old one).
+
+- **USE held**: the client sends the GenericCommand `ptb-use 1` when its USE
+  goes down and `ptb-use 0` when it comes up (keyboard or pad; on a pad that
+  shares X with the reload, after the 0.4 s hold that tells it apart). It
+  sends no `use` (mounting) in this mode.
+- **Plant**: the carrier, alive, on the ground, inside a site's radius
+  (horizontally; its floor within 4 of the site's) and stopped (horizontal
+  speed under 0.06 a physics step) with USE held, for `plant_seconds`. A
+  **defuse**: a team 1 player within 2.2 blocks of the planted bomb, stopped,
+  USE held, for `defuse_seconds`. Either starts over when the body drifts
+  0.75 blocks, takes damage, lets go of USE, jumps (the plant), or stands up:
+  the holder is crouched the whole hold (a client holds its own crouch key;
+  the server holds a bot down), and a human not crouched 0.5 s into it is
+  cancelled (`stood`).
+- To the one holding: `ptb-plant <permille> <active>` and `ptb-defuse
+  <permille> <active>` ten times a second, `active` 0 at the end (done or
+  cancelled); `ptb-refused <why>` for a press that started nothing or a
+  hold given up (`site`, `no_bomb`, `planted`, `not_planted`, `moved`, `hit`,
+  `stood`).
+- **Where the planted bomb is goes to nobody but those who can hear it.**
+  No key and no entity carries its position or its site (every entity goes
+  to every client, with its position: the bomb is none). A client whose
+  player is within 90 blocks of it gets `ptb-bomb-near <x> <y> <z>` (the
+  floor block; it draws the bomb there and plays its beep there, a world
+  sound whose distance and side lead to it), `ptb-bomb-far` when it leaves
+  that range, `ptb-bomb-blast <x> <y> <z>` when it goes off while in range.
+  Everyone else hears a far rumble. The fuse is the server's
+  (`ptb-bomb-time`). The blast is `explosion_blast_retail` with a peak of 600
+  and a radius of 30, then a ball of air of radius 4 that the next round puts
+  back (`TerrainUpdate` both ways).
+- The dropped bomb: `ptb-bomb-at` says where it lies; a team 2 player within
+  1.6 blocks picks it up.
+- **Halftime**: after round `halftime_round` (by default `rounds_to_win - 1`,
+  half the longest match) every player changes side with no death (its
+  PlayerUpdate's team changes), the two team scores swap places (the rounds
+  won stay with the people: team 1 is always the defenders' side, its name
+  and colour), `ptb-swap` is sent to everyone, and the next freeze respawns
+  everyone on its new side.
+
+1.0 only: the 0.75 profile has no such mode.
 
 ## 13. Implementation notes for our code
 

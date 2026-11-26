@@ -1041,3 +1041,73 @@ const gamemode_ops_t arena_ops = {
 .spawn_point    = _arena_spawn_point,
 .spawn_facing   = _arena_spawn_facing,
 };
+
+/* The arena's machinery Plant the Bomb (Ptb.c) plays its rounds with: the
+   same maps, gates and spawn points. Thin wrappers over the statics above,
+   so the arena itself runs exactly the code it ran before (bench.py check).
+   Only one mode runs at a time, so the two share the arena's state. */
+void arena_kit_read_map(server_t* server, toml_table_t* map_toml)
+{
+    _arena_read_map(server, map_toml);
+    /* the bomb's sides stay put: the sites are defended by the side that
+       starts by them */
+    arena.spawn_change = 0;
+}
+
+void arena_kit_gates_init(server_t* server)
+{
+    arena.round        = 0;
+    arena.cell_count   = 0;
+    arena.spawn_rotate = 0;
+    arena.gates_closed = 1;
+    _arena_lanes_reset();
+    for (int k = 0; k < arena.seed_count; k++) {
+        _flood_gate(server, arena.seeds[k]);
+    }
+    _set_gates(server, 0);
+}
+
+void arena_kit_set_gates(server_t* server, int closed)
+{
+    _set_gates(server, closed ? 1 : 0);
+}
+
+int arena_kit_gates_closed(void)
+{
+    return arena.gates_closed;
+}
+
+int arena_kit_gate_cell(int x, int y, int z)
+{
+    return arena.gates_closed && _cell_known(x, y, z);
+}
+
+int arena_kit_gate_count(void)
+{
+    return arena.cell_count;
+}
+
+int arena_kit_countdown_seconds(void)
+{
+    return arena.countdown_seconds;
+}
+
+int arena_kit_spawn_point(server_t* server, player_t* player)
+{
+    return _arena_spawn_point(server, player);
+}
+
+void arena_kit_side_middle(server_t* server, int side, float* x, float* y, float* z)
+{
+    _arena_side_middle(server, side, x, y, z);
+}
+
+void arena_kit_keep_in_spawn(server_t* server)
+{
+    _arena_keep_in_spawn(server);
+}
+
+int arena_kit_land_near(server_t* server, player_t* bot, float x, float y, vector3f_t* out)
+{
+    return _arena_land_near(server, bot, x, y, out);
+}
