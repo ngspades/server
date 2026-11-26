@@ -649,6 +649,9 @@ static int _tc_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
     out->role  = inside ? GM_BOT_ATTACK : GM_BOT_RUSH;
     out->watch_x = out->x + cosf(a) * 10.0f;
     out->watch_y = out->y + sinf(a) * 10.0f;
+    if (!inside) {
+        gamemode_flank(server, bot, out);
+    }
     return 1;
 }
 

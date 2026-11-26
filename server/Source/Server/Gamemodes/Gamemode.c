@@ -461,6 +461,72 @@ void gamemode_state_keys(server_t* server, gm_keys_t* out)
     }
 }
 
+/* A flank for a bot on its way to a point far off (territory control, the
+   hill): instead of walking the straight line with the whole team, each bot
+   bows out to a side of its own and comes in on the objective from the side,
+   a half moon, so the two teams meet all over the map and not in one lane.
+   The waypoint is drawn once per trip (a goal that moves with the bot made the
+   planner redo its way every second) and dropped when the bot respawns (it
+   jumped), reaches it, or the goal moves */
+#define FLANK_NEAR 55.0f
+
+typedef struct
+{
+    uint8_t    on;
+    uint8_t    reached;
+    vector3f_t goal, wp, last;
+} flank_t;
+
+static flank_t flank[256];
+
+void gamemode_flank(server_t* server, player_t* bot, gm_bot_goal_t* out)
+{
+    map_store_t* map = &server->s_map.map;
+    float        bx = bot->movement.position.x, by = bot->movement.position.y;
+    float        dx = out->x - bx, dy = out->y - by, d = sqrtf(dx * dx + dy * dy);
+    if (out->exact || d <= FLANK_NEAR) {
+        return;
+    }
+    flank_t* f = &flank[bot->id];
+    float jump = hypotf(bx - f->last.x, by - f->last.y);
+    f->last.x  = bx;
+    f->last.y  = by;
+    if (!f->on || jump > 25.0f || hypotf(out->x - f->goal.x, out->y - f->goal.y) > 12.0f) {
+        static const float sides[5] = {-1.0f, 1.0f, 0.0f, -0.6f, 0.6f};
+        float              side     = sides[bot->id % 5];
+        float              px = -dy / d, py = dx / d;
+        float              wx = bx + dx * 0.5f + px * side * fminf(d * 0.45f, 90.0f);
+        float              wy = by + dy * 0.5f + py * side * fminf(d * 0.45f, 90.0f);
+        /* on the map, on dry ground: pulled back toward the goal until it is */
+        for (int k = 0; k < 6; k++) {
+            wx = fminf(fmaxf(wx, 4.0f), (float) map->size_x - 5.0f);
+            wy = fminf(fmaxf(wy, 4.0f), (float) map->size_y - 5.0f);
+            int top = map_top(map, (uint16_t) wx, (uint16_t) wy);
+            if (top > 4 && top < map->size_z - 2) {
+                break;
+            }
+            wx = (wx + out->x) * 0.5f;
+            wy = (wy + out->y) * 0.5f;
+        }
+        f->on      = 1;
+        f->reached = side == 0.0f; /* the middle one goes straight */
+        f->goal    = (vector3f_t){out->x, out->y, out->z};
+        f->wp      = (vector3f_t){wx, wy, (float) map_top(map, (uint16_t) wx, (uint16_t) wy)};
+        evt_log(bot, "bot_flank", "action=plan side=%.2f wp=%d,%d goal=%d,%d", side, (int) wx, (int) wy, (int) out->x,
+                (int) out->y);
+    }
+    if (f->reached) {
+        return;
+    }
+    if (hypotf(f->wp.x - bx, f->wp.y - by) < 14.0f) {
+        f->reached = 1;
+        return;
+    }
+    out->x = f->wp.x;
+    out->y = f->wp.y;
+    out->z = f->wp.z;
+}
+
 /* A mode with no objective of its own (the arena, a Lua mode): the
    nearest enemy alive, wherever it is. Without a goal the bots stood at
    their spawns, out of each other's guns, flipping between cover and patrol
