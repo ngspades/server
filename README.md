@@ -51,6 +51,56 @@ community scripts (airstrikes, rollback, vote kicks and many more) and its
 web status page; a big map or a script written for it will not run here as
 it is.
 
+## Maps and networking, compared with SpadesX
+
+Most of what we changed from SpadesX is invisible in a feature table: how the
+map is kept and sent, and how the game state reaches each player. The figures
+below are ours, measured on an Apple M4 with `tools/bench.py` and a map
+benchmark ([docs/map-memory.md](docs/map-memory.md) has the method and every
+number). The "SpadesX" column is what the server did before we changed it:
+its map library (`libmapvxl`, which this server no longer builds) and the way
+it wrote and sent the map, measured on that inherited code and not on a
+SpadesX binary. We did not benchmark SpadesX's network code: where the network table
+names it, it is what the 0.75 protocol itself requires of a 0.75 server.
+
+### The map
+
+| | SpadesX (0.75) | ngspades-server (protocol 1.0) |
+| --- | --- | --- |
+| **In memory** | `libmapvxl`: a dense array, 4 bytes for every cell, air and buried ground included. 64 MiB at 512 x 512, 256 MiB at 1024 x 1024 | `libvxl`: the solid cells as a bitset, and colours only for the cells that touch the air. 6.5-8.8 MiB at 512, 29-34 MiB at 1024. The whole server process: 90 to 31 MiB on Raindance, 297 to 60 MiB on a 1024 map, with the tick unchanged |
+| **Sent to a joining player** | The map written as VXL from the live map for every joiner, then compressed: 0.2-0.7 s of CPU at 512 and 1.1 s at 1024, and a buffer of hundreds of MiB for a 1024 map | The map's stored **ngmap**, sent as it is: nothing is encoded, nothing is allocated, 0 ms on the tick. A map with only a VXL is encoded once, on a thread, and the result is kept in the data folder |
+| **A player who has it already** | The 0.75 protocol has no way to skip it (0.76 added a CRC32 a client can answer) | The join announces the CRC32 and size of the exact stream; a client that has it answers `map-cached 1` and **receives 0 bytes**. A map a player has seen is instant |
+| **Changes since the map loaded** | A joiner gets the live map | A joiner gets the stored stream plus the cells changed since the load as one `TerrainUpdate`. Every map change goes through one function, `proto10_world_cell`, so nothing can change the map without the clients hearing of it |
+| **On disk and on the wire** | VXL: about 2273 MiB for the maps in [ngspades/maps](https://github.com/ngspades/maps) | ngmap at quality 100 (geometry exact, colours within a step): 324 MiB for the same maps, about a seventh. A 512 map is 385-648 KB on the wire, a 1024 one 2.5-2.7 MB |
+
+A joiner on a slow link is not buried: the fragments pace themselves by what
+the connection already holds, up to 64 a tick while it carries less than 64
+KiB, so a fast link gets the map at once. On the 0.75 profile the server still
+sends VXL, because the wire demands it, but compresses a slice of columns at a
+time straight into the deflate stream with no whole-map buffer, and keeps the
+compressed copy while the map is unchanged, so the joins of one map start cost
+one compression.
+
+### The network
+
+| | SpadesX (0.75 protocol) | ngspades-server (protocol 1.0) |
+| --- | --- | --- |
+| **Who sees whom** | The world update carries the position of every player, so a client knows where everyone is, fog or not | A player gets only the bodies it can use. Past the fog an enemy is sent once, standing still, and then nothing until it is back in range: bandwidth saved, and a wallhack that cannot exist |
+| **How often** | One world update with all the players | Each client gets its **own** packet, each body as a delta against what *that client* last received, at a rate by distance: 60 Hz within 32 blocks, 30 within 64, 15 within 128, 5 beyond |
+| **How big** | Six floats (24 bytes) a player | A body's trajectory (position and velocity) in fixed point: 17 bytes instead of 37, with a fallback to floats when a value does not fit |
+| **Measured** | not measured by us | 127 bots on Busan_Port (bases about 390 blocks apart): about 161 KB/s to a client with one broadcast of every body, **about 26 KB/s** with the per-client deltas. The server ticks at 60 Hz in 0.6-0.7 ms on average, at 5-8% of one core and about 76 MiB resident |
+| **Channels** | A client sends everything on one reliable channel | Two: the player's own body (position, orientation, input) goes **unreliable** on channel 1, because a lost one is replaced by the next; everything else is reliable on channel 0. A packet that must be seen before an action (a hit, a block, a tool change) goes reliable |
+| **ENet** | SpadesX's ENet fork | [enet6](https://github.com/SirLynix/enet6), with the packet throttle's deceleration set to 0 (the throttle shrank the reliable window to one MTU a round trip when a line jittered, and the clients' views fell seconds behind) and a 15 s minimum, 40 s maximum timeout, so a phone that stalls briefly is not dropped. One IPv6 socket that also answers IPv4 |
+| **Browsers** | no | WebRTC DataChannels on one UDP port: the same two channels, the same packets |
+| **Abuse** | not compared | Token buckets per player for packets (400 a second), chat and commands, before anything parses them. UDP queries are rate limited and an answer is never larger than its query, so the server cannot be used to amplify an attack |
+
+Two choices make this possible. The whole game runs on one codec,
+`common/proto10/`, and the 0.75 wire lives only in `Server/Legacy/`: both
+protocols call the same game functions, so a rule exists once. And what cannot
+be done in a 16 ms tick is not done on it: bot path planning runs on its own
+thread against its own copy of the map, and a map is encoded on a background
+thread.
+
 ## Building
 
 You need CMake 3.16+, a C11 compiler and these libraries:
