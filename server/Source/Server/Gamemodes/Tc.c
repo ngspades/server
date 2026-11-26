@@ -4,6 +4,7 @@
 #include <Server/BotForts.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Gamemode.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/Gamemodes/Tc.h>
 #include <Server/MapMeta/MapMeta.h>
 #include <Server/Player.h>
@@ -42,6 +43,9 @@
 #define TC_REFILL_DISTANCE  3.0f
 #define TC_REFILL_SECONDS   20
 #define TC_SECONDS          1200
+/* a squad walks to its territory behind its leader until one of them is
+   this near it, then each bot takes its own place in it */
+#define TC_SQUAD_SPLIT      (TC_CAPTURE_DISTANCE * 2.5f)
 
 typedef struct
 {
@@ -617,12 +621,11 @@ static int _tc_rank(server_t* server, player_t* bot)
     return rank;
 }
 
-static int _tc_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
+/* the territory a player of a team goes for and the goal's name: the
+   nearest it does not hold (or its own under attack), every third bot the
+   next one on; with all held, the nearest */
+static int _tc_pick(server_t* server, player_t* bot, const char** name)
 {
-    memset(out, 0, sizeof(*out));
-    if ((bot->team != TEAM_A && bot->team != TEAM_B) || tc.count == 0) {
-        return 0;
-    }
     int   enemy = bot->team == TEAM_A ? TEAM_B : TEAM_A;
     int   want[TC_MAX_TERRITORIES], n = 0;
     float bx = bot->movement.position.x, by = bot->movement.position.y;
@@ -649,7 +652,7 @@ static int _tc_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
         }
         int rank = _tc_rank(server, bot);
         pick     = want[(rank % 3 == 2 && n > 1) ? 1 : 0];
-        gm_goal_name(out, tc.t[pick].owner == (int) bot->team ? "tc-defend" : "tc-take", 0);
+        *name    = tc.t[pick].owner == (int) bot->team ? "tc-defend" : "tc-take";
     } else {
         float best = 1e9f;
         for (int i = 0; i < tc.count; i++) {
@@ -659,9 +662,31 @@ static int _tc_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
                 pick = i;
             }
         }
-        gm_goal_name(out, "tc-hold", 0);
+        *name = "tc-hold";
+    }
+    return pick;
+}
+
+static int _tc_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
+{
+    memset(out, 0, sizeof(*out));
+    if ((bot->team != TEAM_A && bot->team != TEAM_B) || tc.count == 0) {
+        return 0;
+    }
+    const char* name = "tc-hold";
+    int         pick = _tc_pick(server, bot, &name);
+    /* a squad goes for its leader's territory (a bot leader's pick: a
+       human's is wherever it walks, and its bots follow it there), behind
+       the leader until one of them is near it */
+    player_t* leader = squads_leader(server, bot);
+    if (leader != NULL && leader != bot && leader->is_bot && leader->alive) {
+        pick = _tc_pick(server, leader, &name);
     }
     const tc_territory_t* t = &tc.t[pick];
+    if (squads_follow(server, bot, t->x + 0.5f, t->y + 0.5f, TC_SQUAD_SPLIT, out)) {
+        return 1;
+    }
+    gm_goal_name(out, name, 0);
     /* inside the capture cube, each bot at a place of its own round the cell;
        a whole bunker there gives every third bot the place inside it */
     float a = (float) bot->id * 2.399963f;
@@ -731,6 +756,9 @@ const gamemode_ops_t tc_ops = {
     .id             = GAME_MODE_TC,
     .name           = "tc",
     .wire_name      = "tc",
+    /* squads, and a respawn by a mate or at the rally before the front's */
+    .features       = GM_FEAT_SQUAD_SPAWN,
+    .squad_teams    = SQUAD_TEAMS_BOTH,
     .init           = _tc_init,
     .tick           = _tc_tick,
     .extend         = _tc_extend,

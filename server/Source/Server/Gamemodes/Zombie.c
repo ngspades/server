@@ -5,6 +5,7 @@
 #include <Server/Classes.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Gamemode.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/Gamemodes/Zombie.h>
 #include <Server/MapMeta/MapMeta.h>
 #include <Server/Player.h>
@@ -1612,6 +1613,8 @@ const gamemode_ops_t zombie_ops = {
 .id            = GAME_MODE_ZOMBIE,
 .name          = "zombie",
 .wire_name     = "zombie",
+/* the survivors' squads (names and map); a zombie leaves its squad */
+.squad_teams   = 1u << HUMAN_TEAM,
 .perks         = 1,
 .perk_rules    = zombie_perks,
 .crate_rule    = &zombie_crates,

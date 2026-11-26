@@ -30,6 +30,7 @@ int lua_mode_time_left(void)
 
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Ctf.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/Plugins.h>
 #include <Server/Structs/PlayerStruct.h>
 #include <Server/Structs/ServerStruct.h>
@@ -56,6 +57,9 @@ static struct
     uint8_t  time_over;
 } lm;
 
+/* its squads are read from the script at each init (below) */
+static gamemode_ops_t lua_ops;
+
 static void _lua_init(server_t* server)
 {
     server->protocol.gamemode.intel_flags   = 0;
@@ -79,6 +83,14 @@ static void _lua_init(server_t* server)
     double limit = 0;
     if (plugins_mode_number(lm.plugin, "time_limit", &limit) && limit >= 1 && limit <= 86400) {
         lm.deadline = get_nanos() + (uint64_t) limit * NANO_IN_SECOND;
+    }
+    /* squads = true: the generic squads (a mode on the CTF's rules has the
+       CTF's own); squad_spawn = true adds the respawn by a mate and the rally */
+    lua_ops.squad_teams = !lm.rules_ctf && plugins_mode_flag(lm.plugin, "squads") ? SQUAD_TEAMS_BOTH : 0;
+    if (lua_ops.squad_teams != 0 && plugins_mode_flag(lm.plugin, "squad_spawn")) {
+        lua_ops.features |= GM_FEAT_SQUAD_SPAWN;
+    } else {
+        lua_ops.features &= (uint8_t) ~GM_FEAT_SQUAD_SPAWN;
     }
     evt_log(NULL, "lua", "action=init mode=%s rules=%s time_limit=%d", lm.name, lm.rules_ctf ? "ctf" : "own",
             (int) limit);

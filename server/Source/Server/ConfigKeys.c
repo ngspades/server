@@ -192,7 +192,7 @@ static const ck_key_t ck_arena_keys[] = {
 };
 
 /* Gamemodes/Squads.c */
-static const ck_key_t ck_squads_keys[] = {{"enabled", CK_ALL}, {"size", CK_ALL}, CK_END};
+static const ck_key_t ck_squads_keys[] = {{"enabled", CK_ALL}, {"size", CK_ALL}, {"spawn", CK_ALL}, CK_END};
 
 /* Proto10/Sentry.c */
 static const ck_key_t ck_sentry_keys[] = {{"lifetime_seconds", CK_ALL}, CK_END};

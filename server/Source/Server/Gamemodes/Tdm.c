@@ -1,6 +1,7 @@
 // Copyright (c) 2026 ngspades contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <Server/EventLog.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/Gamemodes/Tdm.h>
 #include <Server/Server.h>
 #include <Util/Enums.h>
@@ -78,6 +79,7 @@ const gamemode_ops_t tdm_ops = {
     .id            = GAME_MODE_TDM,
     .name          = "tdm",
     .wire_name     = "ctf", /* the client already draws two team scores */
+    .squad_teams   = SQUAD_TEAMS_BOTH, /* squads, without the respawn by a mate */
     .init          = _tdm_init,
     .tick          = _tdm_tick,
     .extend        = _tdm_extend,

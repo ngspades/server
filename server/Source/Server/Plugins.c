@@ -151,6 +151,11 @@ const char* plugins_mode_field(plugin_t* plugin, const char* field, char* buf, s
     (void) plugin, (void) field, (void) buf, (void) size;
     return NULL;
 }
+int plugins_mode_flag(plugin_t* plugin, const char* field)
+{
+    (void) plugin, (void) field;
+    return 0;
+}
 void plugins_mode_init(plugin_t* plugin)
 {
     (void) plugin;
@@ -2961,6 +2966,18 @@ const char* plugins_mode_field(plugin_t* P, const char* field, char* buf, size_t
     }
     lua_pop(P->L, 2);
     return out;
+}
+
+int plugins_mode_flag(plugin_t* P, const char* field)
+{
+    if (P == NULL || P->L == NULL) {
+        return 0;
+    }
+    lua_rawgeti(P->L, LUA_REGISTRYINDEX, P->ref);
+    lua_getfield(P->L, -1, field);
+    int on = lua_toboolean(P->L, -1);
+    lua_pop(P->L, 2);
+    return on;
 }
 
 int plugins_mode_number(plugin_t* P, const char* field, double* out)

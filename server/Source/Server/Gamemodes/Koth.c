@@ -5,6 +5,7 @@
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Gamemode.h>
 #include <Server/Gamemodes/Koth.h>
+#include <Server/Gamemodes/Squads.h>
 #include <Server/MapMeta/MapMeta.h>
 #include <Server/Player.h>
 #include <proto10/codec.h>
@@ -40,6 +41,9 @@
 #define KOTH_TOWER        4 /* blocks the tower bot raises */
 #define KOTH_FORTS        4 /* posts of each team round the ring, two holders each */
 #define KOTH_OVERWATCH    2 /* Marksmen a team that watch the hill from high ground */
+/* a squad walks to the hill behind its leader until one of them is this
+   near the hill's middle, then each bot takes its own job on it */
+#define KOTH_SQUAD_SPLIT  (KOTH_RADIUS * 3.0f)
 
 enum
 {
@@ -556,6 +560,14 @@ static int _koth_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
     float hdy  = bot->movement.position.y - (koth.hy + 0.5f);
     int   off  = hdx * hdx + hdy * hdy > (KOTH_RADIUS * 0.8f) * (KOTH_RADIUS * 0.8f);
     int   rank = _koth_rank(server, bot);
+    /* the squad goes to the hill together (squads_follow); the overwatch
+       Marksmen keep their own way: they watch the hill from off it */
+    int marksman = _koth_marksman_rank(server, bot);
+    if (!(marksman >= 0 && marksman < KOTH_OVERWATCH) &&
+        squads_follow(server, bot, koth.hx + 0.5f, koth.hy + 0.5f, KOTH_SQUAD_SPLIT, out))
+    {
+        return 1;
+    }
     out->z     = (float) koth.hz;
     out->role  = off ? GM_BOT_RUSH : GM_BOT_ATTACK;
     /* each team's tower and posts at angles of its own, so the two teams'
@@ -607,7 +619,6 @@ static int _koth_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
     /* the Marksmen watch the hill from the highest ground round it that
        sees it (the CTF's overwatch, home the hill): standing on the hill
        with the rest, a rifle was wasted at ten blocks */
-    int marksman = _koth_marksman_rank(server, bot);
     if (marksman >= 0 && marksman < KOTH_OVERWATCH) {
         out->x        = koth.hx + 0.5f;
         out->y        = koth.hy + 0.5f;
@@ -715,6 +726,11 @@ const gamemode_ops_t koth_ops = {
     .id             = GAME_MODE_KOTH,
     .name           = "koth",
     .wire_name      = "koth",
+    /* squads, and a respawn by a mate out of a fight or at the leader's
+       rally: without them every life began at the far spawn and the hill was
+       a lone walk across the map */
+    .features       = GM_FEAT_SQUAD_SPAWN,
+    .squad_teams    = SQUAD_TEAMS_BOTH,
     .init           = _koth_init,
     .tick           = _koth_tick,
     .extend         = _koth_extend,

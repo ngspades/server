@@ -101,6 +101,9 @@ plugin_t* plugins_load_mode(server_t* server, const char* name);
 const char* plugins_mode_field(plugin_t* plugin, const char* field, char* buf, size_t size);
 /* a number field of the mode's table (time_limit): 1 and *out when it is one */
 int plugins_mode_number(plugin_t* plugin, const char* field, double* out);
+/* a field of the mode's table read as Lua reads a condition (squads = true):
+   1 when it is neither nil nor false */
+int plugins_mode_flag(plugin_t* plugin, const char* field);
 /* the mode's on_init */
 void plugins_mode_init(plugin_t* plugin);
 /* game.objective(): 1 and the spot when the mode set one */
