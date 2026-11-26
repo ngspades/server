@@ -200,6 +200,9 @@ typedef struct gamemode_ops
     int (*set_classes)(server_t* server, int on);
 } gamemode_ops_t;
 
+/* bows a far goal out to the bot's own side (a half moon), see Gamemode.c */
+void gamemode_flank(server_t* server, player_t* bot, gm_bot_goal_t* out);
+
 /* the default bot goal: the nearest enemy alive (a mode's hook may fall back on it) */
 int gamemode_hunt_nearest(server_t* server, player_t* bot, gm_bot_goal_t* out);
 

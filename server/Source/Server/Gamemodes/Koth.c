@@ -627,6 +627,9 @@ static int _koth_bot_goal(server_t* server, player_t* bot, gm_bot_goal_t* out)
     out->hold    = 1.5f;
     out->watch_x = out->x + cosf(a) * 8.0f;
     out->watch_y = out->y + sinf(a) * 8.0f;
+    if (off) {
+        gamemode_flank(server, bot, out);
+    }
     return 1;
 }
 

@@ -1114,12 +1114,11 @@ static int _ctf_briefing_goal(server_t* server, player_t* bot, gm_bot_goal_t* ou
 /* Squad lanes: an attacker squad takes its own way to the enemy intel, so a
    team spreads over the map (every squad went down the middle in a line and
    the sides of a big map stayed empty). The squad's leader, its lowest id
-   attacker or rusher alive (not a camper), goes through two waypoints, a
-   third and two thirds of the way from our base to the enemy intel, pushed
-   to the left, the right or kept in the middle by squad (1 left, 2 right, 3
-   middle, ...); the rest of the squad follows it. A new leader starts the
+   attacker or rusher alive (not a camper), goes through LANE_WAYPOINTS waypoints
+   along a half moon from our base to the enemy intel, bowed to the left, the
+   right or kept in the middle by squad (1 left, 2 right, 3 middle, ...); the rest of the squad follows it. A new leader starts the
    lane again */
-#define LANE_WAYPOINTS 2
+#define LANE_WAYPOINTS 4
 
 static struct
 {
@@ -1174,14 +1173,21 @@ static void _ctf_lane_plan(server_t* server, int t, int squad)
     vector3f_t       from  = gm->base[t];
     vector3f_t       to    = gm->intel[1 - t];
     float            dx    = to.x - from.x, dy = to.y - from.y, d = sqrtf(dx * dx + dy * dy);
-    static const int sides[3] = {-1, 1, 0};
-    float            side  = (float) sides[(squad - 1) % 3];
-    float            width = fminf(fmaxf(d * 0.35f, 20.0f), 100.0f);
+    /* the squads fan out: the first two take the wide flanks, the third goes
+       through the middle, the next ones fill the gaps between (a mirrored
+       pair each, tighter than the first) */
+    static const float sides[8] = {-1.0f, 1.0f, 0.0f, -0.55f, 0.55f, -1.3f, 1.3f, 0.0f};
+    float            side  = sides[(squad - 1) % 8];
+    float            width = fminf(fmaxf(d * 0.5f, 24.0f), 160.0f);
     float            px = d > 0.1f ? -dy / d : 0.0f, py = d > 0.1f ? dx / d : 0.0f;
     for (int k = 0; k < LANE_WAYPOINTS; k++) {
-        float f            = (float) (k + 1) / (float) (LANE_WAYPOINTS + 1);
-        lanes[t][squad].wp[k] = _ctf_land_near(server, from.x + dx * f + px * side * width,
-                                               from.y + dy * f + py * side * width);
+        float f = (float) (k + 1) / (float) (LANE_WAYPOINTS + 1);
+        /* a half moon: the push is the sine of the way done, so the squad
+           bows out to the side and comes back in on the objective from the
+           flank (a constant push made a trapezoid that met the enemy head on
+           in the middle and left the sides empty) */
+        float arc = side * width * sinf(3.14159265f * f);
+        lanes[t][squad].wp[k] = _ctf_land_near(server, from.x + dx * f + px * arc, from.y + dy * f + py * arc);
     }
 }
 
