@@ -1,7 +1,7 @@
 # Writing a 0.75 client
 
 What a client needs to join and play on an Ace of Spades 0.75 server, as
-implemented by the Shoot and Destroy client (`client/`, a BetterSpades fork).
+implemented by ngspades-client (a BetterSpades fork).
 It is written for people building their own client. Where our client does
 something on purpose, or still gets something wrong, the text says so under
 **Our client**, with the file it lives in.

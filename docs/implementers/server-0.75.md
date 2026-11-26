@@ -1,7 +1,7 @@
 # Writing a 0.75 server
 
 What a server must do so that Ace of Spades 0.75 clients (the Voxlap client,
-OpenSpades, BetterSpades and the Shoot and Destroy client) can join and play.
+OpenSpades, BetterSpades and ngspades-client) can join and play.
 
 Where it comes from: the ngspades-server is a SpadesX fork that served
 0.75 until it switched to protocol 1.0 only, and its 0.75 layer was removed in
