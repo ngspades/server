@@ -305,6 +305,38 @@ static void _tc_face_enemy(server_t* server, int team, int x, int y, int* fx, in
    request says no while one stands); the teams' counts decide who builds
    it, so two teams crossing there do not both send builders at the same
    cells. */
+/* Lookouts over a territory the team fights for: a tall watchtower on the
+   highest ground that sees its middle, and, once it holds the territory, a
+   two floor barricade facing the enemy; both watched from their tops. The
+   search walks a ray a column: once every 15 s a territory. */
+static uint64_t tc_next_lookout[TC_MAX_TERRITORIES];
+
+static void _tc_lookouts(server_t* server, uint64_t now, int i, int present, int holder)
+{
+    tc_territory_t* t = &tc.t[i];
+    if (now < tc_next_lookout[i]) {
+        return;
+    }
+    tc_next_lookout[i] = now + 15ull * NANO_IN_SECOND;
+    int fx, fy, x, y, z;
+    if (present >= 0 && !bot_fort_exists(BOT_FORT_WATCHTOWER, t->x, t->y, 32)) {
+        _tc_face_enemy(server, present, t->x, t->y, &fx, &fy);
+        if (bot_fort_overlook(server, (uint8_t) present, BOT_FORT_WATCHTOWER, t->x, t->y, t->z, 6, 28, fx, fy, &x, &y,
+                              &z))
+        {
+            bot_fort_request_watch(server, (uint8_t) present, BOT_FORT_WATCHTOWER, x, y, z, fx, fy, t->x, t->y, t->z);
+        }
+    }
+    if (holder >= 0 && (present < 0 || present == holder) && !bot_fort_exists(BOT_FORT_BARRICADE, t->x, t->y, 18)) {
+        _tc_face_enemy(server, holder, t->x, t->y, &fx, &fy);
+        if (bot_fort_overlook(server, (uint8_t) holder, BOT_FORT_BARRICADE, t->x, t->y, t->z, 5, 14, fx, fy, &x, &y,
+                              &z))
+        {
+            bot_fort_request_watch(server, (uint8_t) holder, BOT_FORT_BARRICADE, x, y, z, fx, fy, t->x, t->y, t->z);
+        }
+    }
+}
+
 static void _tc_forts(server_t* server, uint64_t now)
 {
     for (int i = 0; i < tc.count; i++) {
@@ -315,6 +347,7 @@ static void _tc_forts(server_t* server, uint64_t now)
         if (present < 0 && holder < 0) {
             continue;
         }
+        _tc_lookouts(server, now, i, present, holder);
         int fx, fy;
         if (!bot_fort_exists(BOT_FORT_RING, t->x, t->y, 8)) {
             if (present < 0 || now < tc.next_fort[i]) {

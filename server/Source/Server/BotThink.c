@@ -684,6 +684,26 @@ static uint8_t _think_fight(server_t* server, player_t* bot, bot_ai_t* ai, bot_t
        something on the ground. An enemy out of the gun's reach is not
        fought from here (an SMG does not reach the street below): the bot
        closes in and the next roof is on the way */
+    /* on the post of a watchtower or a barricade's deck: the same, the
+       height is what the team raised it for (the fight's cover search took
+       the watch down the stair to duck behind a wall on the ground) */
+    if (t->visible && bot_fort_manning(server, bot) && t->hdist <= _bot_weapon_range(bot) * BOT_FIRE_STRETCH) {
+        _bot_clear_inputs(bot);
+        if (ai->phase != BOT_PHASE_PATROL) {
+            _bot_set_phase(bot, ai, BOT_PHASE_PATROL, 0);
+        }
+        _bot_set_tool(server, bot, TOOL_GUN);
+        _bot_aim_with_error(server, bot, t->tx, t->ty, t->tz + BOT_BODY_CENTER, ai->skill);
+        if (gen_rand(&server->rand) > (1.0f - ai->skill) * 0.35f) {
+            _bot_fire(server, bot, t->target);
+        }
+        if (t->now >= ai->perch_logged) {
+            ai->perch_logged = t->now + _bot_secs(2.0f);
+            evt_log(bot, "bot_fort", "action=post_fight target=%u dist=%.1f", t->target->id, t->hdist);
+        }
+        ai->next_think = t->now + NANO_IN_MILLI * 100;
+        return 1;
+    }
     if (t->visible && _bot_perched(server, bot, ai, t->now) &&
         t->hdist <= _bot_weapon_range(bot) * BOT_FIRE_STRETCH) {
         _bot_clear_inputs(bot);
@@ -1185,6 +1205,7 @@ void _bot_think(server_t* server, player_t* bot, bot_ai_t* ai)
            camping, it is building */
         float fx, fy;
         int   ff;
+        float wx, wy;
         if (bot_fort_goal(server, bot, &fx, &fy, &ff)) {
             t->has_goal     = 1;
             t->gx           = fx;
@@ -1195,6 +1216,24 @@ void _bot_think(server_t* server, player_t* bot, bot_ai_t* ai)
             t->assault      = 0;
             ai->goal_intent = 0;
             ai->goal_hold   = 0.0f;
+            ai->goal_climb  = 0;
+            ai->work        = 0;
+        } else if (bot_fort_post_goal(server, bot, &fx, &fy, &ff, &wx, &wy)) {
+            /* the watch of a finished lookout: up its stair onto the post,
+               then look at the objective it was raised for. The hold is
+               under a cell: a bot at the tower's foot is a cell from its
+               top's column and must not read as there */
+            t->has_goal     = 1;
+            t->gx           = fx;
+            t->gy           = fy;
+            t->gfloor       = ff;
+            t->exact        = 1;
+            t->rush         = 0;
+            t->assault      = 0;
+            t->wx           = wx;
+            t->wy           = wy;
+            ai->goal_intent = 0;
+            ai->goal_hold   = 0.7f;
             ai->goal_climb  = 0;
             ai->work        = 0;
         }

@@ -7,6 +7,7 @@
 
 #include <Server/GameApi.h>
 #include <Server/MapStore.h>
+#include <Server/BotForts.h>
 #include <Server/BotsInternal.h>
 #include <Server/Classes.h>
 
@@ -147,6 +148,9 @@ uint8_t bots_team_built(server_t* server, uint8_t team, int x, int y, int z)
 {
     if (!map_solid(&server->s_map.map, x, y, z)) {
         return 0;
+    }
+    if (bot_fort_cell_kept(team, x, y, z)) {
+        return 1; /* a structure the team raised together is kept as long as it stands */
     }
     uint32_t key = _bot_built_key(x, y, z);
     uint32_t i   = (key * 2654435761u) % BOT_BUILT_SLOTS;

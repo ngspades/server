@@ -363,6 +363,35 @@ static void _koth_face_enemy(server_t* server, int team, int* fx, int* fy)
    side. The structures are shared cover; the bots building them are the
    nearest of that team, up to four. A structure is asked for every five
    seconds; the request itself says no while one of the kind stands there. */
+/* Lookouts over the hill: a tall watchtower on the highest ground round it
+   that sees the hill's floor (inside the ring it counts as on the hill), and
+   once the team holds it a two floor barricade facing the enemy, both raised
+   by the bots that take the chance and watched from their tops. The search
+   reads the map along a ray a column: every 15 s a team, not every request. */
+static uint64_t koth_next_lookout[TEAM_B + 1];
+
+static void _koth_lookouts(server_t* server, int team, int n, int fx, int fy)
+{
+    uint64_t now = get_nanos();
+    if (now < koth_next_lookout[team]) {
+        return;
+    }
+    koth_next_lookout[team] = now + 15ull * NANO_IN_SECOND;
+    int x, y, z;
+    if (!bot_fort_exists(BOT_FORT_WATCHTOWER, koth.hx, koth.hy, 30) &&
+        bot_fort_overlook(server, (uint8_t) team, BOT_FORT_WATCHTOWER, koth.hx, koth.hy, koth.hz, 6, 26, fx, fy, &x,
+                          &y, &z))
+    {
+        bot_fort_request_watch(server, (uint8_t) team, BOT_FORT_WATCHTOWER, x, y, z, fx, fy, koth.hx, koth.hy, koth.hz);
+    }
+    if (koth.holder == team && n >= 4 && !bot_fort_exists(BOT_FORT_BARRICADE, koth.hx, koth.hy, 20) &&
+        bot_fort_overlook(server, (uint8_t) team, BOT_FORT_BARRICADE, koth.hx, koth.hy, koth.hz, 6, 16, fx, fy, &x,
+                          &y, &z))
+    {
+        bot_fort_request_watch(server, (uint8_t) team, BOT_FORT_BARRICADE, x, y, z, fx, fy, koth.hx, koth.hy, koth.hz);
+    }
+}
+
 static void _koth_forts(server_t* server)
 {
     for (int team = TEAM_A; team <= TEAM_B; team++) {
@@ -383,6 +412,7 @@ static void _koth_forts(server_t* server)
         {
             bot_fort_request(server, (uint8_t) team, BOT_FORT_RING, koth.hx, koth.hy, koth.hz, fx, fy);
         }
+        _koth_lookouts(server, team, n, fx, fy);
     }
 }
 

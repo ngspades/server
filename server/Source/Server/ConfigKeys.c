@@ -204,7 +204,9 @@ static const ck_key_t ck_sky_keys[] = {
 
 /* Bots.c, BotProjects.c, BotForts.c */
 static const ck_key_t ck_bots_keys[] = {
-    {"difficulty", CK_ALL}, {"cooperative_bridges", CK_ALL}, {"cooperative_forts", CK_ALL}, CK_END,
+    {"difficulty", CK_ALL}, {"cooperative_bridges", CK_ALL}, {"cooperative_forts", CK_ALL},
+    {"build_chance", CK_10}, {"help_chance", CK_10},       {"build_cooldown", CK_10},
+    CK_END,
 };
 
 /* Net/WebRtc.c (turn and turns: the TURN servers, plan section 10.3) */
