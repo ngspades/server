@@ -779,6 +779,8 @@ void bots_update(server_t* server)
         if (!bot->alive) {
             bot->primary_fire = 0;
             _bot_clear_inputs(bot);
+            ai->ads_on    = 0; /* the respawn clears secondary_fire (Player.c) */
+            ai->ads_until = 0;
             ai->phase      = BOT_PHASE_PATROL;
             ai->has_target = 0;
             ai->has_cover  = 0;
@@ -868,6 +870,8 @@ void bots_update(server_t* server)
         uint64_t tu0 = get_real_nanos();
         _bot_turn(server, bot, ai, get_nanos());
         prof_turn += get_real_nanos() - tu0;
+        /* after the turn: it may have started a sprint, which drops the sights */
+        _bot_ads_tick(server, bot, ai);
     }
 }
 

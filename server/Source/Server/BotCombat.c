@@ -254,6 +254,51 @@ static void _bot_wall_held(server_t* server, player_t* bot, bot_ai_t* ai, player
     evt_log(bot, "bot_peek", "action=give_up target=%s", target->name);
 }
 
+/* the guns a player looks down the sights of at range: not the shotgun
+   (it is fired from the hip up close) nor the rocket launcher (no sight) */
+static uint8_t _bot_ads_gun(const player_t* bot)
+{
+    return bot->item == TOOL_GUN && (bot->weapon == WEAPON_RIFLE || bot->weapon == WEAPON_SMG ||
+                                      (int) bot->weapon == GAME_WEAPON_REVOLVER);
+}
+
+/* Aim down the sights (the right button) while _bot_fire asked for it in
+   the last BOT_ADS_HOLD seconds, through the player's own input path. Bots
+   never pressed it: secondary_fire stayed 0 all match, and a spectator saw
+   every bot fire from the hip. Only toggled with the trigger up and no
+   reload running: game_player_fire_input with the trigger down could spend
+   a round, and during a reload it cancels the reload (as a player's press
+   does). A sprint drops it (Physics.c would slow a sprinting body that
+   kept it: the aimed walk wins over the sprint there) */
+void _bot_ads_tick(server_t* server, player_t* bot, bot_ai_t* ai)
+{
+    /* SP_BOT_ADS=0: never aimed, the bots as they were (a measurement) */
+    static int off = -1;
+    if (off < 0) {
+        const char* env = getenv("SP_BOT_ADS");
+        off             = env != NULL && env[0] == '0';
+    }
+    if (off) {
+        return;
+    }
+    uint64_t now  = get_nanos();
+    uint8_t  want = bot->alive && bot->state == STATE_READY && now < ai->ads_until && _bot_ads_gun(bot) &&
+                   !bot->sprinting && !bot->reloading;
+    if (ai->ads_on && !bot->secondary_fire) {
+        /* the server dropped it (a reload, a sprint, an empty clip) */
+        ai->ads_on = 0;
+        evt_log(bot, "bot_aim", "action=off dist=%.1f weapon=%u why=dropped", ai->ads_dist, bot->weapon);
+    }
+    if (want == ai->ads_on || bot->primary_fire || bot->reloading) {
+        return;
+    }
+    game_player_fire_input(server, bot, want ? 2 : 0);
+    ai->ads_on = bot->secondary_fire;
+    if (ai->ads_on == want) {
+        evt_log(bot, "bot_aim", "action=%s dist=%.1f weapon=%u", want ? "on" : "off", ai->ads_dist, bot->weapon);
+    }
+}
+
 void _bot_fire(server_t* server, player_t* bot, player_t* target)
 {
     _bot_set_tool(server, bot, TOOL_GUN);
@@ -328,6 +373,13 @@ void _bot_fire(server_t* server, player_t* bot, player_t* target)
                     held, bx, by, bz, at, asinf(dir.z) * 57.3f, bot->crouching);
         }
         return;
+    }
+    /* a far target: the sights go up, as a player's right button does
+       (_bot_ads_tick presses it through game_player_fire_input, so the
+       walk slows like anyone's: Physics.c) */
+    if (shooter != NULL && rd2 > BOT_ADS_MIN * BOT_ADS_MIN && _bot_ads_gun(bot)) {
+        shooter->ads_until = get_nanos() + _bot_secs(BOT_ADS_HOLD);
+        shooter->ads_dist  = sqrtf(rd2);
     }
     /* the think aims at once, the body turns to it over the next ticks
        (_bot_turn): the shot waits until the look really got there, or the

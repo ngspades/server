@@ -77,6 +77,8 @@
 #define BOT_TURN_WALK      200.0f                 // degrees a second a bot turns on its way (540 read as swinging about)
 #define BOT_TURN_AIM_MIN   260.0f                 // and onto an enemy, the weakest bot
 #define BOT_TURN_AIM_MAX   720.0f                 // and the best
+#define BOT_ADS_MIN        12.0f                  // a target farther than this is shot down the sights
+#define BOT_ADS_HOLD       1.5f                   // seconds the sights stay up after the last shot asked
 #define BOT_FIRE_ALIGN     0.9986f                // cos(3 deg): it fires only once it looks there
 #define BOT_ENGAGE_KEEP    1.0f                   // seconds it stays stopped for an enemy out of sight
 #define BOT_ENGAGE_MAX     4.0f                   // and at most this long in a row
@@ -350,6 +352,9 @@ typedef struct bot_ai
     uint8_t  beat_on;
     uint8_t  path_stealth;  // the way was planned sneaking
     uint64_t fire_release_at; // the trigger is let go then (see _bot_trigger)
+    uint64_t ads_until;       // wants the sights up until then (_bot_fire, _bot_ads_tick)
+    float    ads_dist;        // how far the target was when it asked
+    uint8_t  ads_on;          // the sights are up (secondary_fire set by this code)
     uint8_t  aimed;           // this think aimed at someone (_bot_aim_with_error)
     uint16_t snap_logged;     // the last enemy bot_snap logged, id + 1
     uint64_t worked_at;       // the spade or a block was last taken out then
@@ -457,6 +462,7 @@ void _bot_aim_with_error(server_t* server, player_t* bot, float tx, float ty, fl
 uint8_t _bot_place_block(server_t* server, player_t* bot, uint32_t X, uint32_t Y, uint32_t Z);
 int _bot_floor_cell(server_t* server, player_t* bot);
 void _bot_trigger(player_t* bot);
+void _bot_ads_tick(server_t* server, player_t* bot, bot_ai_t* ai);
 uint8_t _bot_block_ready(server_t* server, const player_t* bot, uint8_t action);
 uint8_t _bot_block_action(server_t* server, player_t* bot, uint8_t action, int X, int Y, int Z);
 uint8_t _bot_placeable(server_t* server, int x, int y, int z);
