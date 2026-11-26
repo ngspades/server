@@ -47,13 +47,14 @@
    map's last layer) */
 #define GAME_WADE_Z 61.0f
 
-/* A phone's or a pad's sprint climbs a one block step: sprint there is a
-   stick pushed to its edge or a held button, not the keyboard's key, and a
-   step stopped the player. The keyboard keeps the original rule. Which
-   device a player uses is the caller's to say (the server's copy of the
-   client's 1.0 device, the client's own on a 0.75 server). */
+/* On protocol 1.0 a sprinting player climbs a one block step on every
+   device, as the phone's always did: a step stopped the run. A device that
+   never said what it is (a bot, a client that has not sent it yet) keeps the
+   original rule. Protocol 0.75/0.76 never climbs while sprinting: its
+   callers say so before asking (the server's copy of the client's 1.0
+   device only exists on 1.0). */
 static inline int game_device_sprint_climbs(int device) {
-    return device == GAME_INPUT_PAD || device == GAME_INPUT_TOUCH;
+    return device == GAME_INPUT_KBM || device == GAME_INPUT_PAD || device == GAME_INPUT_TOUCH;
 }
 
 #endif

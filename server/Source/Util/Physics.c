@@ -321,9 +321,9 @@ int physics_try_uncrouch(server_t* server, player_t* player)
     return 0;
 }
 
-/* A phone's or a pad's sprint climbs a one block step too (common/physics/
-   box.h): the server's copy of the client's 1.0 device; a bot or a 0.75
-   player has none (0) and never climbs while sprinting. */
+/* A sprinting 1.0 player climbs a one block step on any device (common/
+   physics/box.h): the server's copy of the client's 1.0 device; a bot or a
+   0.75 player has none (0) and never climbs while sprinting. */
 static inline int player_sprint_climbs(const player_t* player)
 {
     return player->protocol == PROTOCOL_10 && game_device_sprint_climbs(player->device_input);
