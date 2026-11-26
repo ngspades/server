@@ -1642,6 +1642,7 @@ Ours add (decimal string arguments):
 | C→S | `use` | board the nearest usable thing in reach of my own team (a helicopter's seat, pilot's seat first, or a machine gun's one gunner seat), or leave what I sit on (12.8) |
 | S→C | `mount <player> <entity> <seat>` | `<player>` sat down in `<seat>` (0 the pilot or the gunner) of entity `<entity>`; `mount <player> -1 0` when it left. Sent on every change and for everyone mounted when a client enters the game (after the lights) |
 | S→C | `use-refused <why>` | to the asker: `none` (nothing in reach), `team` (only the other team's), `full` (every seat taken), `busy` (the MG has a gunner), `dead`, `wrecked`, `rate` |
+| S→C | `bot-voice <player> <key>` | to the 1.0 clients of `<player>`'s team only: that bot shouts a line the client may play as a recorded voice at its body. Keys: `take_heli` (it decided to fly its team's helicopter), `heli_down` (the helicopter it flew was shot down). At most one a bot a key in 5 s and one a team in 1.5 s; the same moment brings a team chat line. A client ignores a key it does not know (more may come: `need_pilot` is reserved) (12.8) |
 | C→S | `squad <n>` | join squad `<n>` of my team (0 = alone), the pause menu's squad row |
 | S→C | `squads <size> <spawn>` | when a 1.0 client enters the game: the squads' size, 0 when squads are off (the mode has none: creative, or `[squads] enabled = false`); `<spawn>` 1 where a respawn lands next to a squadmate and `squad-rally` is taken (ngCTF, king of the hill, territory control), 0 elsewhere (classic CTF, team deathmatch, the arena, the zombie mode, whose zombies have no squad) |
 | S→C | `squad <player> <n>` | `<player>` is in squad `<n>` (0 none): every squad when a client enters the game, then each change |
@@ -2750,6 +2751,28 @@ in this section exists in the 0.75 profile.
 - Logged as `EVT heli action=base|spawn|spawn_failed|mount|dismount|damage|
   crash|wreck|explode|respawn` and `EVT mount
   action=mount|dismount|refused|state player= entity= seat= why=`.
+
+**Bots** (`Server/BotHeli.c`). A bot is a player here too: it boards with
+`mount_use` (the `use` above), flies with the pilot's keys, look and held jump
+or crouch, and leaves with `use`. An attacking bot with nothing to fight and
+its goal more than 100 blocks off takes its team's free, standing helicopter
+within 40 blocks on a `[bots] heli_chance` roll (percent, default 30; one roll
+a helicopter a minute; `heli_enabled = false` turns it off; `SP_BOT_HELI`,
+`SP_BOT_HELI_CHANCE`), or always when a human waits in a passenger seat of a
+pilotless one (within 60). It says so (team chat and `bot-voice <id>
+take_heli`), walks to the pilot's door (goal `board-heli`), flies 12 blocks over
+the highest ground ahead (round what it cannot clear under the ceiling) toward
+the mode's goal, lands on flat dry ground near it and gets out. It also lands
+after 90 s in the air, below 40% health, with an enemy helicopter in the air
+within 50 or an enemy machine gunner within 60 that sees it, or when it makes no
+progress; a wreck under it is `bot-voice <id> heli_down`. Bots never take a
+passenger seat (nobody fires from one). With no player to shoot at, a bot
+shoots the enemy's occupied helicopters, sentries and MGs in sight through the
+HitEntity path (`proto10_objects_on_hit`), the rocket launcher leading a moving
+hull; never its own team's. `EVT bot_heli
+action=roll|decide|cancel|board|takeoff|detour|land|dismount|down`, `EVT
+bot_heli_shot target= type=heli|sentry|mg result=hit|miss|rocket`, `EVT
+bot_voice key=`.
 
 **Checked.** Four bots on Villages_1024 at 20x: a bot boarded a helicopter
 (seat 0), its body followed the seat, an enemy's shot at it was refused

@@ -24,6 +24,7 @@
 #include <Server/Profile.h>
 #include <Server/BotProjects.h>
 #include <Server/BotForts.h>
+#include <Server/BotHeli.h>
 #include <Server/Proto10/Bridge.h>
 #include <Server/Sky.h>
 #include <uthash/uthash.h>
@@ -574,6 +575,7 @@ void bots_update(server_t* server)
     bots_lights(server);
     bot_projects_tick(server);
     bot_forts_tick(server);
+    bot_heli_tick_begin(server);
     static uint64_t sight_since;
     uint64_t        tnow = get_nanos();
     if (sight_since == 0) {
@@ -757,6 +759,8 @@ void bots_update(server_t* server)
         if (ai == NULL || !ai->active) {
             continue;
         }
+        /* a helicopter lost under it, a walk to one that ended (BotHeli.c) */
+        bot_heli_watch(server, bot);
         if (ai->fire_release_at != 0 && get_nanos() >= ai->fire_release_at) {
             bot->primary_fire   = 0;
             ai->fire_release_at = 0;
@@ -815,6 +819,12 @@ void bots_update(server_t* server)
             _bot_role_weapon(server, bot, ai);
             continue;
         }
+        /* in a helicopter's seat: it flies (or gets out), nothing else of
+           its tick runs: its body is the seat's (Proto10/Mount.c) */
+        if (bot_heli_pilot(server, bot, ai)) {
+            continue;
+        }
+        bot_heli_consider(server, bot, ai);
         /* bot_hidden: a roof over the head (the column's top block above it) */
         if ((prof_ticks + bot->id) % 30 == 0 && ai->role != GM_BOT_DEFEND && !ai->camper) {
             int kind = ai->role == GM_BOT_INFILTRATE ? 0 : ai->role == GM_BOT_COVER ? 1 : ai->sneaky ? 2 : 3;
@@ -842,6 +852,8 @@ void bots_update(server_t* server)
             if (!(gamemode_player_rules(server, bot) & GM_RULE_NO_GUN)) { /* a zombie has no gun to snap */
                 _bot_snap_shot(server, bot, ai);
             }
+            /* nobody to shoot at: an enemy helicopter, sentry or MG */
+            bot_heli_shoot(server, bot, ai);
             prof_think += pt1 - pt0;
             prof_snap += get_real_nanos() - pt1;
             prof_thinks++;
@@ -1005,6 +1017,7 @@ void bots_init(server_t* server)
              p->aim_error);
     bot_projects_init(server);
     bot_forts_init(server);
+    bot_heli_init(server);
 }
 
 uint8_t bot_difficulty(void)

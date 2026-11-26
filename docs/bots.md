@@ -411,6 +411,78 @@ the water level are the same rules a player meets.
 - **Licence:** the same as the bridges. BattleSpades is AGPL-3.0; this is
   our own implementation of the idea, no cell list and no code taken from it.
 
+## Helicopters
+
+`Server/BotHeli.c`, protocol 1.0, on the 1024 maps that have helicopters
+(docs/protocol-1.0.md 12.8). A bot uses one exactly as a player does: `use`
+(`mount_use`) to board and to get out, the movement keys, the look and the held
+jump / crouch to fly. Nothing in the seat or the flight knows it is a bot.
+
+- **Taking one.** Once a second an attacker or rusher with no enemy in its
+  sights, carrying nothing, not on a post or a job, whose goal is more than
+  100 blocks away, looks for its team's helicopter standing free (pilot seat
+  empty, not moving) within 40 blocks. The first such bot rolls `[bots]
+  heli_chance` (percent, 30; `SP_BOT_HELI_CHANCE`) for that helicopter, and
+  nobody rolls for it again for 60 s: rolled by every bot, every helicopter went
+  up at the start. A human sitting in a passenger seat of a pilotless one is
+  answered every time, within 60 blocks. `[bots] heli_enabled = false`
+  (`SP_BOT_HELI=0`) turns it off.
+- **Saying it.** The bot says "I'll take the chopper!" (or a variant) in its
+  team chat and sends its team's 1.0 clients `bot-voice <id> take_heli`; when
+  the helicopter it flies is shot down, "Helicopter down!" and `bot-voice <id>
+  heli_down` (one a bot a key in 5 s, one a team in 1.5 s).
+- **Getting in.** Its goal becomes the pilot's door (`board-heli`, walk only,
+  past fights); within reach it presses `use`. Given up after 25 s, or when the
+  seat is taken, the helicopter goes or the bot dies; a passenger seat (a human
+  took the stick) is left at once. Bots never ride as passengers: nobody fires
+  from a helicopter.
+- **Flying.** Toward the mode's goal (a plugin's first, else the patrol
+  anchor), kept inside the play area. The height is 12 blocks over the highest
+  ground under the hull and on the way ahead (14 blocks plus 2.5 s of speed,
+  three columns wide each side); it climbs at once for what comes and settles 2
+  blocks a second after it, and stops moving to climb when it is 3 under the
+  height it wants. What it cannot clear under the ceiling (z 3) it goes round,
+  30, 60 or 90 degrees off the line (`bot_heli action=detour`); with no way
+  round for 6 s it lands. The thrust is a velocity controller: the keys that
+  bring the hull's velocity toward 13 blocks a second at the target, slower
+  near it, so it brakes by itself.
+- **Landing.** Within 20 blocks of the goal it picks flat dry ground for the
+  hull (every column under it at one level) within 30 blocks and comes down,
+  letting the descent go only below 5 blocks a second (2.5 near the ground: a
+  landing over 6 hurts), and gets out once it rests. It also lands after 90 s
+  in the air, below 40% of its health, with an enemy helicopter in the air
+  within 50 or an enemy machine gunner within 60 that sees it, after 15 s
+  without getting closer, and jumps out after 20 s of a landing that never
+  touched down.
+- **Shooting at one.** A bot with no player to shoot at shoots the enemy's
+  helicopters with someone aboard, sentries and machine guns it sees within its
+  gun's range (and the fog): aim with its usual error at the middle of the box,
+  the look turned there first, the trigger, the clip spent, and a hit sent as
+  the HitEntity a client sends (`proto10_objects_on_hit`: the same range,
+  sight, rate and friendly checks). An empty helicopter at its pad is no target:
+  bots near the enemy's pads shot every new one all match. A Rocketeer leads a
+  moving hull by the rocket's flight time. Its own team's are never targets
+  (and the damage path refuses them anyway).
+- **Logged:** `EVT bot_heli action=roll|decide|cancel|board|takeoff|detour|
+  land|dismount|down why=`, `EVT bot_heli_shot target= type=heli|sentry|mg
+  result=hit|miss|rocket|refused`, `EVT bot_voice key= team= told=`;
+  `SP_BOT_HELI_TRACE=1` adds the pilot's figures twice a second
+  (`bot_heli_trace`).
+- **Measured** (16 bots, 600 s, 4 seeds, the build before against this one,
+  1024 maps from the player's folder through `--maps-dir`): ngCTF
+  Villages_1024 3.3 boardings a match, every one took off, 1.8 landed at the
+  goal and got out, 6.3 detours, no crash into the map (every `heli
+  action=crash` was a wreck's fall), 0.25 shot down; 10.5 shots at helicopters
+  (5 hits) and 6.8 at sentries and MGs; kills 86 to 98 (±16), pickups 7.3 to
+  7.5, captures 2 to 2.3. KotH Villages_1024 4.5 boardings, 1 shot down, 21
+  shots at helicopters, kills 98 to 88 (±20; 92 to 93 over 8 seeds), rounds
+  4.3 to 4. ngCTF Mountain_River_1024 1.3 boardings, captures 3.3 to 4; KotH
+  there kills 95 to 92, rounds 4 to 3.8. Territory control: no boarding (its
+  bots respawn at the front, far from the pads). The tick the same (avg 0.2
+  to 0.4 ms in both builds). Modes with no helicopter, sentry or MG play
+  event for event as before (`bench.py check`: ctf, koth and tc on
+  Busan_Port, babel on babelstairs).
+
 ## Forward posts on large maps
 
 On a large map (bases 200 blocks apart or more: Raindance, Busan_Port)

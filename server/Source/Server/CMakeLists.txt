@@ -94,6 +94,7 @@ set(SERVER_HEADERS
     BotGoal.h
     BotProjects.h
     BotForts.h
+    BotHeli.h
     Grenade.h
     HostPackets.h
     Nodes.h
@@ -215,6 +216,7 @@ set(SERVER_SOURCES
     BotPlanner.c
     BotProjects.c
     BotForts.c
+    BotHeli.c
     Grenade.c
     Nodes.c
     Staff.c
@@ -286,6 +288,8 @@ target_compile_features(Server PRIVATE cxx_std_17)
 # its own unit: added to a unity batch it moved Plugins.c in with MapMeta.c,
 # whose static names clash
 set_source_files_properties(Rcon.c PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# BotHeli.c: its statics (_bh_*) kept out of a batch with the other bot files
+set_source_files_properties(BotHeli.c PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # the same for the network counters: in a batch they moved Drills.c in with
 # a file whose _player clashes
 set_source_files_properties(Proto10/NetStats.c PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
