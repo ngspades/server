@@ -56,6 +56,17 @@ void game_player_join(server_t*   server,
         }
     }
 
+    /* a full team (the mode's limit, 5 v 5) takes a person in place of a
+       bot; with no bot to give, the other team, else the spectators */
+    if ((player->team == TEAM_A || player->team == TEAM_B) && !gamemode_team_admit(server, player->team)) {
+        uint8_t other = player->team == TEAM_A ? TEAM_B : TEAM_A;
+        uint8_t to    = gamemode_team_admit(server, other) ? other : TEAM_SPECTATOR;
+        evt_log(player, "team", "refused why=full requested=%u chosen=%u max=%d", (unsigned) player->team,
+                (unsigned) to, gamemode_team_max(server));
+        send_server_notice(player, 0, "That team is full: %d players at most.", gamemode_team_max(server));
+        player->team = to;
+    }
+
     if (player->team != TEAM_SPECTATOR) {
         server->protocol.num_team_users[player->team]++;
     }

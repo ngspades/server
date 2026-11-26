@@ -1,6 +1,7 @@
 // Copyright (c) 2026 ngspades contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <Server/Classes.h>
+#include <Server/Bots.h>
 #include <Server/EventLog.h>
 #include <Server/Plugins.h>
 #include <Server/Gamemodes/Arena.h>
@@ -473,6 +474,38 @@ int gamemode_has(server_t* server, unsigned feature)
         return 1;
     }
     return (gamemode_current(server)->features & feature) != 0;
+}
+
+int gamemode_team_max(server_t* server)
+{
+    return gamemode_current(server)->team_max;
+}
+
+int gamemode_team_full(server_t* server, uint8_t team)
+{
+    int most = gamemode_team_max(server);
+    return most > 0 && (team == TEAM_A || team == TEAM_B) && server->protocol.num_team_users[team] >= most;
+}
+
+int gamemode_team_admit(server_t* server, uint8_t team)
+{
+    if (!gamemode_team_full(server, team)) {
+        return 1;
+    }
+    /* the host's bots fill a team up; a person joining takes a bot's place
+       (the dead ones first: nobody sees one vanish mid fight) */
+    player_t *p, *tmp, *pick = NULL;
+    HASH_ITER(hh, server->players, p, tmp)
+    {
+        if (p->is_bot && p->team == team && (pick == NULL || (!p->alive && pick->alive))) {
+            pick = p;
+        }
+    }
+    if (pick != NULL && bot_remove(server, pick->id)) {
+        evt_log(NULL, "team", "bot_made_room team=%u max=%d", (unsigned) team, gamemode_team_max(server));
+        return 1;
+    }
+    return 0;
 }
 
 int gamemode_set_classes(server_t* server, int on)

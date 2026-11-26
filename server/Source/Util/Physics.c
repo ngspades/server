@@ -2,6 +2,9 @@
 #include <devices/devices.h>
 #include <modes/modes.h>
 #include <physics/box.h>
+#include <physics/solid.h>
+#include <Server/Gamemodes/Gamemode.h>
+#include <Server/Profile.h>
 #include <math.h>
 #include <stddef.h>
 
@@ -381,12 +384,59 @@ static inline void _phys_axis_move(server_t* server,
         *velocity_axis = 0;
 }
 
+/* A living body another one may not walk into (GM_RULE_SOLID_PLAYERS) */
+static inline int _phys_is_solid_body(const player_t* other)
+{
+    return other->alive && other->state == STATE_READY && (other->team == TEAM_A || other->team == TEAM_B);
+}
+
+/* Solid players (common/physics/solid.h, the client predicts the same): the
+   step that ended at the body's position slides along every living body it
+   would walk into. When the slid spot is inside a wall the body stays where
+   it was before the step, which is always a legal place. */
+static void _phys_solid_players(server_t* server, player_t* player, float ox, float oy, float lift, float span)
+{
+    float nx = player->movement.position.x, ny = player->movement.position.y;
+    int   changed = 0;
+
+    if (profile_is_075() || !(gamemode_player_rules(server, player) & GM_RULE_SOLID_PLAYERS)) {
+        return;
+    }
+    player_t *other, *tmp;
+    HASH_ITER(hh, server->players, other, tmp)
+    {
+        if (other == player || !_phys_is_solid_body(other) ||
+            !game_solid_height(player->movement.position.z, other->movement.position.z)) {
+            continue;
+        }
+        changed |= game_solid_clip(ox, oy, &nx, &ny, other->movement.position.x, other->movement.position.y,
+                                   GAME_SOLID_DIST, GAME_SOLID_NUDGE, player->id < other->id ? 1.0f : -1.0f);
+    }
+    if (!changed) {
+        return;
+    }
+    /* the slid spot must fit the walls at every height the body is scanned */
+    for (float z = span; z >= GAME_BOX_SCAN_END; z -= GAME_BOX_SCAN_STEP) {
+        if (_phys_corners_blocked(server, nx - GAME_BOX_HALF_WIDTH, nx + GAME_BOX_HALF_WIDTH,
+                                  ny - GAME_BOX_HALF_WIDTH, ny + GAME_BOX_HALF_WIDTH,
+                                  player->movement.position.z + lift + z)) {
+            nx = ox;
+            ny = oy;
+            break;
+        }
+    }
+    player->movement.position.x = nx;
+    player->movement.position.y = ny;
+}
+
 /* player movement with autoclimb */
 void physics_box_clip_move(server_t* server, player_t* player, physics_t* physics)
 {
     float step, span, nx, ny, nz, offset;
     long  climb = 0;
     int   can_climb;
+
+    float start_x = player->movement.position.x, start_y = player->movement.position.y;
 
     step = physics->fsynctics * 32.f;
     nx   = step * player->movement.velocity.x + player->movement.position.x;
@@ -440,6 +490,7 @@ void physics_box_clip_move(server_t* server, player_t* player, physics_t* physic
     } else
         player->movement.position.z = nz - offset;
 
+    _phys_solid_players(server, player, start_x, start_y, offset, player->crouching ? GAME_BOX_SPAN_CROUCH : GAME_BOX_SPAN_STAND);
     _phys_reposition(player, &player->movement.position, physics);
 }
 

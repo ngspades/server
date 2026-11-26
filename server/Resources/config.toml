@@ -273,13 +273,15 @@ team_color_seconds = 5   # the winner's colour in the fog after a round (0 off)
 # maps): team 1 defends sites A and B, team 2 plants the bomb. The arena's
 # gates and spawns above apply too. The map's toml [ptb] wins over these
 [ptb]
-freeze_seconds = 8       # behind the closed gates before a round (1..60)
+# Counter-Strike: Global Offensive's competitive rules (MR15, 5 v 5: a team
+# holds 5 people at most, bots included)
+freeze_seconds = 15      # behind the closed gates before a round (1..60)
 round_seconds = 115      # 1:55; unplanted when it runs out, the defenders win
 bomb_seconds = 40        # the planted bomb's fuse
 plant_seconds = 3.2      # USE held, still, inside a site
-defuse_seconds = 10      # USE held by the bomb
-rounds_to_win = 8        # rounds that win the match (1..30)
-# halftime_round = 7     # the sides swap after this round (0 never);
+defuse_seconds = 10      # USE held by the bomb (CS:GO: 10 s, 5 s with a kit: we have no kits)
+rounds_to_win = 16       # rounds that win the match (1..30); 15-15 after round 30 is a draw
+# halftime_round = 15    # the sides swap after this round (0 never);
                          # without it rounds_to_win - 1, half the longest match
 
 
