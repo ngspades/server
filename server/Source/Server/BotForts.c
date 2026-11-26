@@ -668,6 +668,21 @@ static uint8_t _fort_stand(server_t* server, const bot_fort_t* f, const fort_cel
                 if (inside) {
                     score += 20.0f;
                 }
+                /* the structure is cover from the threat's side only: a
+                   builder in front of it (toward the enemy) puts the wall
+                   up and then stands in the open it was meant to shield it
+                   from (about half the barricades' and bunkers' blocks were
+                   placed from there). Stand behind the cell whenever some
+                   column within reach is; a front stand is the last resort
+                   (a ring is round: its inside/outside rule above is
+                   the whole story) */
+                if (f->kind != BOT_FORT_RING) {
+                    float ahead = ddx * (float) f->fx + ddy * (float) f->fy;
+                    /* ddx, ddy are stand minus cell: positive is the threat's side */
+                    if (ahead > 0.5f) {
+                        score += 12.0f + 4.0f * ahead;
+                    }
+                }
                 if (score < best) {
                     best   = score;
                     bx     = sx;
@@ -1701,6 +1716,22 @@ uint8_t bot_fort_step(server_t* server, player_t* bot)
     if (dx * dx + dy * dy + dz * dz > 4.5f * 4.5f) {
         return 0; /* still walking */
     }
+    /* do not put it from the threat's side when the stand chosen is behind
+       the cell: the reach (4.5) is met long before the stand when the bot
+       comes from the enemy, and it then built the wall and stood in front
+       of it. Walk round to the stand first. A claim that never gets there
+       runs out like any other (FORT_CLAIM_SECONDS). */
+    if (f->kind != BOT_FORT_RING) {
+        float ahead = (bot->movement.position.x - ((float) c->x + 0.5f)) * (float) f->fx +
+                      (bot->movement.position.y - ((float) c->y + 0.5f)) * (float) f->fy;
+        int   sx, sy, sf;
+        if (ahead > 0.7f && _fort_stand(server, f, c, &sx, &sy, &sf)) {
+            float sa = ((float) sx - (float) c->x) * (float) f->fx + ((float) sy - (float) c->y) * (float) f->fy;
+            if (sa <= 0.5f) {
+                return 0;
+            }
+        }
+    }
     _bot_clear_inputs(bot);
     /* the team's colour, not the ground's: a fortification is the team's and
        its people have to find it. The quick walls a post raises stay the
@@ -1715,8 +1746,12 @@ uint8_t bot_fort_step(server_t* server, player_t* bot)
         if (f->placed[b] < 255) {
             f->placed[b]++;
         }
-        evt_log(bot, "bot_fort", "action=place id=%u kind=%s cell=%d,%d,%d blocks=%u", f->id, _fort_kind_name(f->kind),
-                c->x, c->y, c->z, bot->blocks);
+        /* which side of the cell the builder stood on, along the threat:
+           front = on the enemy's side, where the wall does not cover it */
+        float ahead = (bot->movement.position.x - ((float) c->x + 0.5f)) * (float) f->fx +
+                      (bot->movement.position.y - ((float) c->y + 0.5f)) * (float) f->fy;
+        evt_log(bot, "bot_fort", "action=place id=%u kind=%s cell=%d,%d,%d blocks=%u exposed=%d ahead=%.1f", f->id,
+                _fort_kind_name(f->kind), c->x, c->y, c->z, bot->blocks, ahead > 0.7f, ahead);
         /* its share is done: it goes back to the fight and a mate helps (a
            seventy cell watchtower kept one builder off the objective for
            minutes); alone on it, it finishes, or the site is given up near
