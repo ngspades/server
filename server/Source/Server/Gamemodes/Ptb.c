@@ -880,6 +880,7 @@ static void _ptb_start_freeze(server_t* server)
     _ptb_crater_restore(server);
     _ptb_set_state(PTB_FREEZE);
     arena_kit_set_gates(server, 1);
+    grenades_clear_all(server); /* none thrown last round explodes in this one */
     ptb.winner     = -1;
     ptb.why        = "";
     ptb.bomb       = PTB_BOMB_NONE;
@@ -945,6 +946,7 @@ static void _ptb_end_round(server_t* server, int winner, const char* why)
 {
     gamemode_vars_t* gm = &server->protocol.gamemode;
     _ptb_act_cancel(server, "round_end");
+    grenades_clear_all(server); /* a round ended: nothing in flight carries over */
     ptb.winner = winner;
     ptb.why    = why;
     if (winner == TEAM_A || winner == TEAM_B) {

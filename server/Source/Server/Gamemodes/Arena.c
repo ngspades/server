@@ -1,5 +1,6 @@
 // Copyright (c) 2026 ngspades contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include <Server/Grenade.h>
 #include <Server/Bots.h>
 #include <Server/EventLog.h>
 #include <Server/Gamemodes/Arena.h>
@@ -496,6 +497,7 @@ static void _start_countdown(server_t* server)
     _arena_color_restore(server);
     _set_state(ARENA_COUNTDOWN);
     _set_gates(server, 1);
+    grenades_clear_all(server); /* none thrown last round explodes in this one */
     /* everyone, alive or not, starts the round fresh behind their gate */
     player_t *p, *tmp;
     HASH_ITER(hh, server->players, p, tmp)
@@ -518,6 +520,7 @@ static void _end_round(server_t* server, int winner, const char* why)
 {
     gamemode_vars_t* gm = &server->protocol.gamemode;
     arena.winner        = winner;
+    grenades_clear_all(server);
     if (winner == TEAM_A || winner == TEAM_B) {
         gm->score[winner]++;
         arena.match_over = gm->score[winner] >= gm->score_limit;

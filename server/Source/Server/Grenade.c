@@ -235,6 +235,21 @@ static void _grenade_blast_log(server_t* server, player_t* thrower, player_t* p,
             at.z, sqrtf(dx * dx + dy * dy + dz * dz), see, value);
 }
 
+void grenades_clear_all(server_t* server)
+{
+    player_t *p, *tmp;
+    HASH_ITER(hh, server->players, p, tmp)
+    {
+        grenade_t *g, *gtmp;
+        DL_FOREACH_SAFE(p->grenade, g, gtmp)
+        {
+            proto10_entities_grenade_removed(server, p, g);
+            DL_DELETE(p->grenade, g);
+            free(g);
+        }
+    }
+}
+
 void handle_grenade(server_t* server, player_t* player)
 {
     grenade_t* grenade;

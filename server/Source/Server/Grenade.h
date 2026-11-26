@@ -6,6 +6,11 @@
 vector3i_t* getGrenadeNeighbors(vector3i_t pos);
 uint8_t     get_grenade_damage(server_t* server, player_t* damaged_player, grenade_t* grenade);
 void        handle_grenade(server_t* server, player_t* player);
+/* every grenade in flight is removed (and the 1.0 clients told): a round
+   mode calls it where a round ends or starts, so one thrown before the
+   change never explodes in the next round. A thrower's death does NOT
+   call it: a grenade already thrown still goes off (handle_grenade) */
+void        grenades_clear_all(server_t* server);
 
 /* get_grenade_damage at a point: 4096 / d^2 in sight, capped at 100 */
 uint8_t explosion_damage_at(server_t* server, player_t* damaged_player, vector3f_t at);
