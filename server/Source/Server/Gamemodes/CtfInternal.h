@@ -15,6 +15,8 @@
 void handleTentAndIntel(server_t* server, player_t* player);
 void _ctf_init(server_t* server);
 void _ctf_tick(server_t* server);
+int  _ctf_time_left(server_t* server);
+int  _ctf_extend(server_t* server, int seconds);
 void _ctf_player_out(server_t* server, player_t* player);
 void _ctf_terrain_changed(server_t* server, int built);
 void _ctf_state_keys(server_t* server, gm_keys_t* out);

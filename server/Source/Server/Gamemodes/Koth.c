@@ -232,7 +232,7 @@ static void _koth_init(server_t* server)
     server->protocol.gamemode.score[0]      = 0;
     server->protocol.gamemode.score[1]      = 0;
     uint64_t now     = get_nanos();
-    koth.deadline    = now + (uint64_t) KOTH_SECONDS * NANO_IN_SECOND;
+    koth.deadline    = now + (uint64_t) gamemode_match_seconds(KOTH_SECONDS) * NANO_IN_SECOND;
     koth.next_score  = now;
     koth.next_fort   = now;
     koth.ended       = 0;
@@ -467,6 +467,12 @@ static void _koth_state_keys(server_t* server, gm_keys_t* out)
     if (koth.last_winner >= 0) {
         gm_keys_put(out, P10_GM_KOTH_WINNER, "%s", _koth_team_word(koth.last_winner));
     }
+}
+
+static int _koth_time_left(server_t* server)
+{
+    (void) server;
+    return koth.ended ? 0 : gamemode_seconds_until(koth.deadline);
 }
 
 static int _koth_extend(server_t* server, int seconds)
@@ -734,6 +740,7 @@ const gamemode_ops_t koth_ops = {
     .init           = _koth_init,
     .tick           = _koth_tick,
     .extend         = _koth_extend,
+    .time_left         = _koth_time_left,
     .state_keys     = _koth_state_keys,
     .summary_stat   = "hill",
     .player_stat    = _koth_player_hill,

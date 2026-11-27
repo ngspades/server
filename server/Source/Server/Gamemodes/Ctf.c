@@ -30,6 +30,9 @@
 #include <Server/Structs/ServerStruct.h>
 #include <Util/Enums.h>
 #include <Util/Log.h>
+
+/* the match's time limit, below (_ctf_time_check): set when a capture wins */
+static uint8_t ctf_ended;
 #include <Util/Nanos.h>
 #include <Util/Types.h>
 #include <Util/Weapon.h>
@@ -597,6 +600,7 @@ void handleTentAndIntel(server_t* server, player_t* player)
                     server->protocol.gamemode.intel[team] = set_intel_tent_spawn_point(server, team, MAP_META_FLAG);
                 }
                 if (winning) {
+                    ctf_ended = 1;
                     gamemode_match_won(server);
                 }
             }
@@ -613,9 +617,42 @@ static void _ctf_base_snapshot(server_t* server);
 static void _ctf_posts_reset(void);
 static void _ctf_posts_tick(server_t* server);
 
+/* the match's time limit: when it runs out the team with more captures wins,
+   equal captures are a draw. CTF used to end only at the capture limit and
+   could go on for ever (SP_MATCH_SECONDS shortens it for tests) */
+#define CTF_SECONDS 1200
+static uint64_t ctf_deadline;
+
+int _ctf_time_left(server_t* server)
+{
+    (void) server;
+    return ctf_ended ? 0 : gamemode_seconds_until(ctf_deadline);
+}
+
+int _ctf_extend(server_t* server, int seconds)
+{
+    ctf_deadline += (uint64_t) seconds * NANO_IN_SECOND;
+    server->match_extra_seconds += (uint32_t) seconds;
+    evt_log(NULL, "ctf", "action=extend seconds=%d", seconds);
+    return 1;
+}
+
+static void _ctf_time_check(server_t* server)
+{
+    if (ctf_ended || get_nanos() < ctf_deadline) {
+        return;
+    }
+    ctf_ended = 1;
+    evt_log(NULL, "ctf", "action=end why=time score=%u-%u", (unsigned) server->protocol.gamemode.score[0],
+            (unsigned) server->protocol.gamemode.score[1]);
+    gamemode_match_won(server);
+}
+
 void _ctf_init(server_t* server)
 {
     gamemode_vars_t* gm = &server->protocol.gamemode;
+    ctf_deadline        = get_nanos() + (uint64_t) gamemode_match_seconds(CTF_SECONDS) * NANO_IN_SECOND;
+    ctf_ended           = 0;
     memset(ctf_spots, 0, sizeof(ctf_spots)); /* a new map: a script sets them again */
     gm->intel_flags     = 0;
     gm->intel[0]        = set_intel_tent_spawn_point(server, 0, MAP_META_FLAG);
@@ -1423,6 +1460,7 @@ static void _ctf_lane_fort(server_t* server, int t, vector3f_t w)
    leader (a new one only when it left), and how far along its lane it got */
 void _ctf_tick(server_t* server)
 {
+    _ctf_time_check(server);
     _ctf_seats_tick(server);
     squads_census(server);
     _ctf_forts(server);
@@ -4078,6 +4116,8 @@ const gamemode_ops_t ctf_ops = {
 .wire_name       = "ctf",
 .init            = _ctf_init,
 .tick            = _ctf_tick,
+.extend          = _ctf_extend,
+.time_left       = _ctf_time_left,
 .player_step     = handleTentAndIntel,
 .player_out      = _ctf_player_out,
 .terrain_changed = _ctf_terrain_changed,
@@ -4130,6 +4170,7 @@ static void _babel_slab_audit(server_t* server)
 
 static void _babel_tick(server_t* server)
 {
+    _ctf_time_check(server);
     static uint64_t logged_at;
     uint64_t        now = get_nanos();
     _babel_slab_audit(server);
@@ -4203,6 +4244,8 @@ const gamemode_ops_t babel_ops = {
 .wire_name       = "ctf",
 .init            = _babel_init,
 .tick            = _babel_tick,
+.extend          = _ctf_extend,
+.time_left       = _ctf_time_left,
 .player_step     = handleTentAndIntel,
 .player_out      = _ctf_player_out,
 .terrain_changed = _ctf_terrain_changed,

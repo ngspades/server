@@ -553,6 +553,7 @@ int p10_decode_chat_broadcast(const uint8_t* data, size_t size, p10_chat_broadca
 #define P10_GM_TEAM1_SCORE      "team1-score"
 #define P10_GM_TEAM2_SCORE      "team2-score"
 #define P10_GM_CAPTURE_LIMIT    "capture-limit"
+#define P10_GM_MATCH_TIME       "match-time"  /* seconds left of a timed match (absent: no time limit) */
 #define P10_GM_TEAM1_INTEL      "team1-intel"
 #define P10_GM_TEAM2_INTEL      "team2-intel"
 /* The objectives' entities (12.2.3) have fixed ids: P10_OBJECTIVE_ID_BASE +
