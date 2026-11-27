@@ -16,7 +16,7 @@
 [server]
 # The server's name, shown on the server lists (ours and the public 0.75
 # one). "{game}" (here and in the messages below) is the game's name.
-name = "[S&D] Classic CTF 0.75"
+name = "[NGS] Classic CTF 0.75"
 
 # Port for the server to listen on: the 1.0 server's (32887) + 10, so the
 # two never fight for it. The WebRTC port follows it ([webrtc] below).

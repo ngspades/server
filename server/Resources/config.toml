@@ -1,7 +1,7 @@
 [server]
 # The server's name. This is shown on the server list. "{game}" (here and in
 # the messages below) is the game's name, set once in common/game.cmake.
-name = "[S&D] ngCTF 24/7"
+name = "[NGS] ngCTF 24/7"
 
 # Port for the server to listen on
 port = 32887

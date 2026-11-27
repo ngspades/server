@@ -2,16 +2,16 @@
 # this file: the C code sees the strings as macros, CMake uses the variables
 # (package name, server binary). tools/ scripts and the Makefile parse this
 # file for the same values. Change it here and rebuild both.
-set(GAME_NAME "Shoot and Destroy")
+set(GAME_NAME "Nextgen Spades")
 # the mark, for where the full name does not fit: an app icon's label (a
 # phone truncates it), the home screen of a narrow window, a splash. It
 # never replaces the name in a sentence or on a store page
-set(GAME_SHORT_NAME "S&D")
+set(GAME_SHORT_NAME "NGS")
 # the same mark for a template that is XML (Info.plist): CMake substitutes
 # the raw text, and an unescaped "&" makes the plist unreadable
 string(REPLACE "&" "&amp;" GAME_SHORT_NAME_XML "${GAME_SHORT_NAME}")
 # file and folder names: archives, the player's folder, the app's files
-set(GAME_SLUG "shootanddestroy")
+set(GAME_SLUG "ngspades")
 # the server's own name, apart from the game's: the binary, its archives, its
 # Docker image and the service a host installs. Dedicated servers outlive a
 # change of the game's working title (and a host's firewall rule, systemd unit
