@@ -298,7 +298,7 @@ static void _match_summary_send(server_t* server, int wait_seconds, int voting)
             winner, gm->score[0], gm->score[1], length, players, parts[6], parts[7], wait_seconds);
 }
 
-int gamemode_match_seconds(const char* key, int normal)
+int gamemode_match_seconds(const char* section, int normal)
 {
     const char* env = getenv("SP_MATCH_SECONDS");
     int         n   = env != NULL ? atoi(env) : 0;
@@ -316,13 +316,13 @@ int gamemode_match_seconds(const char* key, int normal)
         return normal;
     }
     int           seconds = normal;
-    toml_table_t* table   = toml_table_in(conf, "match");
+    toml_table_t* table   = toml_table_in(conf, section);
     if (table != NULL) {
-        toml_datum_t d = toml_int_in(table, key);
+        toml_datum_t d = toml_int_in(table, "match_seconds");
         if (d.ok && d.u.i >= 30 && d.u.i <= 86400) {
             seconds = (int) d.u.i;
         } else if (d.ok) {
-            LOG_WARNING("config.toml [match] %s = %lld is outside 30..86400: %d s applies", key, (long long) d.u.i, normal);
+            LOG_WARNING("config.toml [%s] match_seconds = %lld is outside 30..86400: %d s applies", section, (long long) d.u.i, normal);
         }
     }
     toml_free(conf);

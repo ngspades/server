@@ -181,14 +181,13 @@ static const ck_key_t ck_anticheat_keys[] = {
 };
 
 /* Gamemodes/Gamemode.c gamemode_match_seconds: the time limit of the
-   point-scored modes (the 0.75 profile has ctf and babel) */
-static const ck_key_t ck_match_keys[] = {
-    {"ctf_seconds", CK_ALL},
-    {"babel_seconds", CK_ALL},
-    {"ngctf_seconds", CK_10},
-    {"tc_seconds", CK_10},
-    {"tdm_seconds", CK_10},
-    {"koth_seconds", CK_10},
+   point-scored modes, in the mode's own section (the 0.75 profile has ctf and babel) */
+static const ck_key_t ck_match_seconds_keys[] = {
+    {"match_seconds", CK_ALL},
+    CK_END,
+};
+static const ck_key_t ck_match_seconds_keys_10[] = {
+    {"match_seconds", CK_10},
     CK_END,
 };
 
@@ -327,7 +326,12 @@ static const ck_table_t ck_top_subs[] = {
     {.name = "classes", .prof = CK_10, .any = &ck_class_shape, .sub_known = ck_class_name},
     {.name = "net", .keys = ck_net_keys},
     {.name = "zombie", .prof = CK_10, .keys = ck_zombie_keys},
-    {.name = "match", .keys = ck_match_keys},
+    {.name = "ctf", .keys = ck_match_seconds_keys},
+    {.name = "babel", .keys = ck_match_seconds_keys},
+    {.name = "ngctf", .prof = CK_10, .keys = ck_match_seconds_keys_10},
+    {.name = "tc", .prof = CK_10, .keys = ck_match_seconds_keys_10},
+    {.name = "tdm", .prof = CK_10, .keys = ck_match_seconds_keys_10},
+    {.name = "koth", .prof = CK_10, .keys = ck_match_seconds_keys_10},
     {.name = "arena", .prof = CK_10, .keys = ck_arena_keys},
     {.name = "ptb", .prof = CK_10, .keys = ck_ptb_keys},
     {.name = "conduct", .keys = ck_conduct_keys},

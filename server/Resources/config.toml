@@ -255,17 +255,28 @@ spawn_near_min = 35.0   # a zombie's respawn, from a living survivor
 spawn_near_max = 50.0
 
 
-# The time limit of the point-scored modes, in seconds (30..86400). When it
-# runs out the match ends by the score (a tie is a draw), and the clients
-# hear the closing music in the last 5 seconds. A match never runs for ever;
-# arena, ptb and zombie play rounds, creative has no end. /extend adds time.
-[match]
-ctf_seconds   = 1200    # classic CTF
-ngctf_seconds = 1200    # next gen CTF
-babel_seconds = 1200    # Babel
-tc_seconds    = 1200    # territory control
-tdm_seconds   = 900     # team deathmatch
-koth_seconds  = 900     # king of the hill
+# The time limit of the point-scored modes: match_seconds in the mode's own
+# section (30..86400). When it runs out the match ends by the score (a tie is
+# a draw), and the clients hear the closing music in the last 5 seconds. A
+# match never runs for ever; arena, ptb and zombie play rounds (their own
+# round_seconds), creative has no end. /extend adds time.
+[ctf]
+match_seconds = 1200    # classic CTF
+
+[ngctf]
+match_seconds = 1200    # next gen CTF
+
+[babel]
+match_seconds = 1200
+
+[tc]
+match_seconds = 1200    # territory control
+
+[tdm]
+match_seconds = 900     # team deathmatch
+
+[koth]
+match_seconds = 900     # king of the hill
 
 # Arena mode (rounds without respawns on Counter-Strike maps). All keys are
 # optional; a map's own [arena] table and its .txt narrow them down for that

@@ -263,16 +263,15 @@ static void _net(char* out, size_t size, toml_table_t* root)
 
 static void _match(char* out, size_t size, toml_table_t* root)
 {
-    toml_table_t* t = toml_table_in(root, "match");
-    if (t == NULL) {
-        return;
+    static const struct { const char* section; int normal; } modes[] = {
+        {"ctf", 1200}, {"ngctf", 1200}, {"babel", 1200}, {"tc", 1200}, {"tdm", 900}, {"koth", 900},
+    };
+    for (size_t k = 0; k < sizeof modes / sizeof modes[0]; k++) {
+        toml_table_t* t = toml_table_in(root, modes[k].section);
+        if (t != NULL) {
+            _int_in(out, size, modes[k].section, t, "match_seconds", 30, 86400, modes[k].normal);
+        }
     }
-    _int_in(out, size, "match", t, "ctf_seconds", 30, 86400, 1200);
-    _int_in(out, size, "match", t, "ngctf_seconds", 30, 86400, 1200);
-    _int_in(out, size, "match", t, "babel_seconds", 30, 86400, 1200);
-    _int_in(out, size, "match", t, "tc_seconds", 30, 86400, 1200);
-    _int_in(out, size, "match", t, "tdm_seconds", 30, 86400, 900);
-    _int_in(out, size, "match", t, "koth_seconds", 30, 86400, 900);
 }
 
 static void _zombie(char* out, size_t size, toml_table_t* root)

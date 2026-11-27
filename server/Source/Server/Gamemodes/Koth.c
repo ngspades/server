@@ -232,7 +232,7 @@ static void _koth_init(server_t* server)
     server->protocol.gamemode.score[0]      = 0;
     server->protocol.gamemode.score[1]      = 0;
     uint64_t now     = get_nanos();
-    koth.deadline    = now + (uint64_t) gamemode_match_seconds("koth_seconds", KOTH_SECONDS) * NANO_IN_SECOND;
+    koth.deadline    = now + (uint64_t) gamemode_match_seconds("koth", KOTH_SECONDS) * NANO_IN_SECOND;
     koth.next_score  = now;
     koth.next_fort   = now;
     koth.ended       = 0;

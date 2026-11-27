@@ -652,9 +652,9 @@ void _ctf_init(server_t* server)
 {
     gamemode_vars_t* gm = &server->protocol.gamemode;
     uint8_t     mode    = server->protocol.current_gamemode;
-    ctf_deadline        = get_nanos() + (uint64_t) gamemode_match_seconds(mode == GAME_MODE_NGCTF   ? "ngctf_seconds"
-                                                                           : mode == GAME_MODE_BABEL ? "babel_seconds"
-                                                                                                     : "ctf_seconds",
+    ctf_deadline        = get_nanos() + (uint64_t) gamemode_match_seconds(mode == GAME_MODE_NGCTF   ? "ngctf"
+                                                                           : mode == GAME_MODE_BABEL ? "babel"
+                                                                                                     : "ctf",
                                                                            CTF_SECONDS) * NANO_IN_SECOND;
     ctf_ended           = 0;
     memset(ctf_spots, 0, sizeof(ctf_spots)); /* a new map: a script sets them again */

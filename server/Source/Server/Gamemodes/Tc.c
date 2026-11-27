@@ -229,7 +229,7 @@ static void _tc_init(server_t* server)
     server->protocol.gamemode.score_limit = (uint8_t) tc.count;
     _tc_score(server);
     uint64_t now  = get_nanos();
-    tc.deadline   = now + (uint64_t) gamemode_match_seconds("tc_seconds", TC_SECONDS) * NANO_IN_SECOND;
+    tc.deadline   = now + (uint64_t) gamemode_match_seconds("tc", TC_SECONDS) * NANO_IN_SECOND;
     tc.last_step  = now;
     /* the classes are the host's choice, off unless asked: the command line
        (--classes 0|1) first, then the console (/classes) */
