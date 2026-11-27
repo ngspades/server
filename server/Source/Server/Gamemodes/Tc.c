@@ -229,7 +229,7 @@ static void _tc_init(server_t* server)
     server->protocol.gamemode.score_limit = (uint8_t) tc.count;
     _tc_score(server);
     uint64_t now  = get_nanos();
-    tc.deadline   = now + (uint64_t) gamemode_match_seconds(TC_SECONDS) * NANO_IN_SECOND;
+    tc.deadline   = now + (uint64_t) gamemode_match_seconds("tc_seconds", TC_SECONDS) * NANO_IN_SECOND;
     tc.last_step  = now;
     /* the classes are the host's choice, off unless asked: the command line
        (--classes 0|1) first, then the console (/classes) */
@@ -241,7 +241,7 @@ static void _tc_init(server_t* server)
         server->features_on |= GM_FEAT_CLASSES | GM_FEAT_CLASS_PERKS;
     }
     LOG_INFO("Territory control: %d territories, %u-%u held, %d s at most, classes %s", tc.count,
-             server->protocol.gamemode.score[0], server->protocol.gamemode.score[1], TC_SECONDS, classes ? "on" : "off");
+             server->protocol.gamemode.score[0], server->protocol.gamemode.score[1], (int) ((tc.deadline - now) / NANO_IN_SECOND), classes ? "on" : "off");
     evt_log(NULL, "tc", "action=start territories=%d held=%u-%u axis=%c classes=%d", tc.count,
             server->protocol.gamemode.score[0], server->protocol.gamemode.score[1], tc.axis ? 'y' : 'x', classes);
 }

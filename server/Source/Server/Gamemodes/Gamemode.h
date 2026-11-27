@@ -235,9 +235,11 @@ void gamemode_tick(server_t* server);
 /* 1 when the mode added the seconds to its clock; 0 when its match has no
    time limit (the command says so and changes nothing) */
 int  gamemode_extend(server_t* server, int seconds);
-/* the time limit of a point-scored mode, in seconds: normal, or
-   $SP_MATCH_SECONDS when set (tests: a match that ends in a few seconds) */
-int gamemode_match_seconds(int normal);
+/* the time limit of a point-scored mode, in seconds: config.toml's [match]
+   key (ctf_seconds, ngctf_seconds, babel_seconds, tc_seconds, tdm_seconds,
+   koth_seconds: 30..86400) or normal, and $SP_MATCH_SECONDS over both when
+   set (tests: a match that ends in a few seconds). A match never runs for ever */
+int gamemode_match_seconds(const char* key, int normal);
 /* whole seconds, rounded up, from now to a deadline (get_nanos clock); 0 when past */
 int gamemode_seconds_until(uint64_t deadline);
 /* a team won the match: everyone reloads, the next map starts */

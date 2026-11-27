@@ -261,6 +261,20 @@ static void _net(char* out, size_t size, toml_table_t* root)
     _int_in(out, size, "net", t, "connection_window_seconds", 1, 3600, 10);
 }
 
+static void _match(char* out, size_t size, toml_table_t* root)
+{
+    toml_table_t* t = toml_table_in(root, "match");
+    if (t == NULL) {
+        return;
+    }
+    _int_in(out, size, "match", t, "ctf_seconds", 30, 86400, 1200);
+    _int_in(out, size, "match", t, "ngctf_seconds", 30, 86400, 1200);
+    _int_in(out, size, "match", t, "babel_seconds", 30, 86400, 1200);
+    _int_in(out, size, "match", t, "tc_seconds", 30, 86400, 1200);
+    _int_in(out, size, "match", t, "tdm_seconds", 30, 86400, 900);
+    _int_in(out, size, "match", t, "koth_seconds", 30, 86400, 900);
+}
+
 static void _zombie(char* out, size_t size, toml_table_t* root)
 {
     toml_table_t* t = toml_table_in(root, "zombie");
@@ -476,6 +490,7 @@ int config_check(const char* path, char* out, size_t size)
     _server(out, size, root);
     _teams(out, size, root);
     _net(out, size, root);
+    _match(out, size, root);
     _zombie(out, size, root);
     _conduct(out, size, root);
     _anticheat(out, size, root);

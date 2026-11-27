@@ -232,7 +232,7 @@ static void _koth_init(server_t* server)
     server->protocol.gamemode.score[0]      = 0;
     server->protocol.gamemode.score[1]      = 0;
     uint64_t now     = get_nanos();
-    koth.deadline    = now + (uint64_t) gamemode_match_seconds(KOTH_SECONDS) * NANO_IN_SECOND;
+    koth.deadline    = now + (uint64_t) gamemode_match_seconds("koth_seconds", KOTH_SECONDS) * NANO_IN_SECOND;
     koth.next_score  = now;
     koth.next_fort   = now;
     koth.ended       = 0;
@@ -261,7 +261,7 @@ static void _koth_init(server_t* server)
         server->features_on |= GM_FEAT_CLASSES | GM_FEAT_CLASS_PERKS;
     }
     LOG_INFO("King of the Hill: hill at %d,%d,%d, %d s held a round, %d rounds win, %d s at most", koth.hx,
-             koth.hy, koth.hz, KOTH_ROUND_POINTS, KOTH_ROUNDS, KOTH_SECONDS);
+             koth.hy, koth.hz, KOTH_ROUND_POINTS, KOTH_ROUNDS, (int) ((koth.deadline - now) / NANO_IN_SECOND));
     evt_log(NULL, "koth", "action=start at=%d,%d,%d round_points=%d rounds=%d classes=%d", koth.hx, koth.hy,
             koth.hz, KOTH_ROUND_POINTS, KOTH_ROUNDS, classes);
 }

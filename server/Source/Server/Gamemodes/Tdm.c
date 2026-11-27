@@ -27,10 +27,11 @@ static void _tdm_init(server_t* server)
     server->protocol.gamemode.score[0]      = 0;
     server->protocol.gamemode.score[1]      = 0;
     tdm.start    = get_nanos();
-    tdm.deadline = tdm.start + (uint64_t) gamemode_match_seconds(TDM_SECONDS) * NANO_IN_SECOND;
+    tdm.deadline = tdm.start + (uint64_t) gamemode_match_seconds("tdm_seconds", TDM_SECONDS) * NANO_IN_SECOND;
     tdm.ended    = 0;
-    LOG_INFO("Team deathmatch: %d kills, %d s", TDM_SCORE_LIMIT, TDM_SECONDS);
-    evt_log(NULL, "tdm", "action=start limit=%d seconds=%d", TDM_SCORE_LIMIT, TDM_SECONDS);
+    int seconds = (int) ((tdm.deadline - tdm.start) / NANO_IN_SECOND);
+    LOG_INFO("Team deathmatch: %d kills, %d s", TDM_SCORE_LIMIT, seconds);
+    evt_log(NULL, "tdm", "action=start limit=%d seconds=%d", TDM_SCORE_LIMIT, seconds);
 }
 
 static void _tdm_tick(server_t* server)
