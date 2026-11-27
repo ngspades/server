@@ -69,6 +69,13 @@ static void _gm_compute(server_t* server, gm_keys_t* s)
         gm_keys_put(s, t == 0 ? P10_GM_TEAM1_SCORE : P10_GM_TEAM2_SCORE, "%u", (unsigned) gm->score[t]);
     }
     gm_keys_put(s, P10_GM_CAPTURE_LIMIT, "%u", (unsigned) gm->score_limit);
+    /* the time limit of a point-scored mode: exact in the last minute, to
+       10 s before it, so a long match does not resend the state every second */
+    const gamemode_ops_t* ops = gamemode_current(server);
+    int                   left = ops->time_left != NULL ? ops->time_left(server) : -1;
+    if (left >= 0) {
+        gm_keys_put(s, P10_GM_MATCH_TIME, "%d", left <= 60 ? left : (left + 9) / 10 * 10);
+    }
     /* the mode marks the objectives it has (Flags.c) while it writes its keys */
     proto10_flags_begin();
     gamemode_state_keys(server, s);

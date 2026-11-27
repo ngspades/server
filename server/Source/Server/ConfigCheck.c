@@ -261,6 +261,19 @@ static void _net(char* out, size_t size, toml_table_t* root)
     _int_in(out, size, "net", t, "connection_window_seconds", 1, 3600, 10);
 }
 
+static void _match(char* out, size_t size, toml_table_t* root)
+{
+    static const struct { const char* section; int normal; } modes[] = {
+        {"ctf", 1200}, {"ngctf", 1200}, {"babel", 1200}, {"tc", 1200}, {"tdm", 900}, {"koth", 900},
+    };
+    for (size_t k = 0; k < sizeof modes / sizeof modes[0]; k++) {
+        toml_table_t* t = toml_table_in(root, modes[k].section);
+        if (t != NULL) {
+            _int_in(out, size, modes[k].section, t, "match_seconds", 30, 86400, modes[k].normal);
+        }
+    }
+}
+
 static void _zombie(char* out, size_t size, toml_table_t* root)
 {
     toml_table_t* t = toml_table_in(root, "zombie");
@@ -476,6 +489,7 @@ int config_check(const char* path, char* out, size_t size)
     _server(out, size, root);
     _teams(out, size, root);
     _net(out, size, root);
+    _match(out, size, root);
     _zombie(out, size, root);
     _conduct(out, size, root);
     _anticheat(out, size, root);

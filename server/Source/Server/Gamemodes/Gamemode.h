@@ -137,6 +137,10 @@ typedef struct gamemode_ops
     void (*tick)(server_t* server);
     /* /extend: add seconds to a timed match; 1 when the mode did */
     int (*extend)(server_t* server, int seconds);
+    /* seconds left of the match's time limit (0 once it has run out or the
+       match is over); -1 when the mode has none. Sent to the clients as
+       GameModeState's match-time */
+    int (*time_left)(server_t* server);
     /* every server tick for each READY player (intel pickup, capture, tent: a
        player running over the intel is on it for a fraction of a second) */
     void (*player_step)(server_t* server, player_t* player);
@@ -231,6 +235,13 @@ void gamemode_tick(server_t* server);
 /* 1 when the mode added the seconds to its clock; 0 when its match has no
    time limit (the command says so and changes nothing) */
 int  gamemode_extend(server_t* server, int seconds);
+/* the time limit of a point-scored mode, in seconds: config.toml's
+   match_seconds in the mode's own section ([ctf], [ngctf], [babel], [tc],
+   [tdm], [koth]: 30..86400) or normal, and $SP_MATCH_SECONDS over both when
+   set (tests: a match that ends in a few seconds). A match never runs for ever */
+int gamemode_match_seconds(const char* section, int normal);
+/* whole seconds, rounded up, from now to a deadline (get_nanos clock); 0 when past */
+int gamemode_seconds_until(uint64_t deadline);
 /* a team won the match: everyone reloads, the next map starts */
 void gamemode_match_won(server_t* server);
 
