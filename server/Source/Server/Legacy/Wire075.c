@@ -8,6 +8,7 @@
  * one channel), counted by the network statistics, and never to a bot
  * (conn == NULL: sending to a NULL peer was the historic crash).
  */
+#include <Server/Gamemodes/Tc.h>
 #include <Server/Legacy/Wire075.h>
 
 #include <Server/BotPlanner.h>
@@ -119,8 +120,11 @@ void legacy_send_state_data(server_t* server, player_t* player)
         return;
     }
     gamemode_vars_t* gm = &server->protocol.gamemode;
-    /* 104 as the original: the CTF state fills 84 of them, the rest is 0 */
-    uint8_t  buf[104];
+    /* 84 bytes, the CTF state exactly, as pyspades writes it and as the
+       clidoc's size check reads it (the original SpadesX padded it to 104 with
+       zeros: a client that checks the size would refuse that) */
+    uint8_t  buf[84 + 1 + 13 * 16]; /* CTF: 84; TC: 32 + count + 13 a territory */
+    size_t   len = 84;
     stream_t s = _stream(buf, sizeof buf);
     memset(buf, 0, sizeof buf);
     stream_write_u8(&s, PACKET_TYPE_STATE_DATA);
@@ -134,6 +138,25 @@ void legacy_send_state_data(server_t* server, player_t* player)
         stream_write_u8(&s, server->protocol.current_gamemode);
     } else {
         stream_write_u8(&s, 0);
+    }
+
+    if (server->protocol.current_gamemode == 1) {
+        /* territory control, pyspades' TCState: the count, then each
+           territory's cell as three floats and its holder (2 = nobody) */
+        int n = tc_count();
+        stream_write_u8(&s, (uint8_t) n);
+        for (int i = 0; i < n; i++) {
+            float x, y, z;
+            int   owner = tc_territory(i, &x, &y, &z);
+            stream_write_f(&s, x);
+            stream_write_f(&s, y);
+            stream_write_f(&s, z);
+            stream_write_u8(&s, (uint8_t) owner);
+        }
+        len = 33 + (size_t) n * 13;
+        legacy_send(player, buf, len);
+        evt_log(player, "wire", "profile=075 action=state_data id=%u mode=tc territories=%d", (unsigned) player->id, n);
+        return;
     }
 
     // MODE CTF:
@@ -162,7 +185,7 @@ void legacy_send_state_data(server_t* server, player_t* player)
     stream_write_vector3f(&s, gm->base[0]);
     stream_write_vector3f(&s, gm->base[1]);
 
-    legacy_send(player, buf, sizeof buf);
+    legacy_send(player, buf, len);
     evt_log(player, "wire", "profile=075 action=state_data id=%u", (unsigned) player->id);
 }
 
@@ -512,6 +535,27 @@ static void _objects_tick(server_t* server)
         legacy_objects[k] = now[k];
         _send_move_object(server, (uint8_t) k, (uint8_t) (k & 1), now[k]);
     }
+}
+
+/* territory control: ProgressBar (a territory's capture, which the client runs
+   on at rate * 0.05 a second toward the capturing team) and TerritoryCapture
+   (it changed hands; winning when that team now holds them all) */
+void legacy_tc_progress(server_t* server, int index, int capturing, int rate, float progress)
+{
+    uint8_t  buf[8];
+    stream_t s = _stream(buf, sizeof buf);
+    stream_write_u8(&s, PACKET_TYPE_PROGRESS_BAR);
+    stream_write_u8(&s, (uint8_t) index);
+    stream_write_u8(&s, (uint8_t) capturing);
+    stream_write_u8(&s, (uint8_t) (int8_t) rate);
+    stream_write_f(&s, progress);
+    legacy_broadcast(server, NULL, buf, sizeof buf);
+}
+
+void legacy_tc_capture(server_t* server, int index, int team, int winning)
+{
+    uint8_t buf[4] = {PACKET_TYPE_TERRITORY_CAPTURE, (uint8_t) index, (uint8_t) winning, (uint8_t) team};
+    legacy_broadcast(server, NULL, buf, sizeof buf);
 }
 
 void legacy_intel_event(server_t* server, uint8_t team, int event)

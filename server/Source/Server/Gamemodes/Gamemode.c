@@ -83,7 +83,8 @@ static int _in_profile(const gamemode_ops_t* ops)
     if (ops != NULL && ops->id == GAME_MODE_LUA) {
         return 1;
     }
-    return !profile_is_075() || ops->id == GAME_MODE_CTF || ops->id == GAME_MODE_BABEL;
+    return !profile_is_075() || ops->id == GAME_MODE_CTF || ops->id == GAME_MODE_BABEL ||
+           ops->id == GAME_MODE_TC;
 }
 
 const gamemode_ops_t* gamemode_find(const char* name)
@@ -107,7 +108,7 @@ const gamemode_ops_t* gamemode_find(const char* name)
         found = lua_mode_find(name);
     }
     if (found != NULL && !_in_profile(found)) {
-        LOG_WARNING("Mode '%s' is not in the 0.75 profile (it has ctf and babel)", name);
+        LOG_WARNING("Mode '%s' is not in the 0.75 profile (it has ctf, tc and babel)", name);
         evt_log(NULL, "gamemode", "action=refused mode=%s why=profile", name);
         return NULL;
     }
@@ -204,7 +205,7 @@ void gamemode_init(server_t* server, uint8_t id)
        line above prints the mode's own flags, not what the profile keeps) */
     if (profile_is_075()) {
         evt_log(NULL, "perk", "action=off why=profile");
-        evt_log(NULL, "profile", "name=075 modes=ctf,babel off=perks,classes,squad_wire,squad_spawn,rally,assists,"
+        evt_log(NULL, "profile", "name=075 modes=ctf,tc,babel off=perks,classes,squad_wire,squad_spawn,rally,assists,"
                                  "spotting");
     }
 }
