@@ -6,7 +6,7 @@
 The server itself. Command line options (#raw("--port"), #raw("--gamemode"), #raw("--map"), #raw("--preset")) win over this section.
 
 #config-table((
-  (`name`, `string`, `"[S&D] ngCTF 24/7" (1.0); "[S&D] Classic CTF 0.75" (0.75)`, [The name on the server list.], [both], `SP_SERVER_NAME`),
+  (`name`, `string`, `"[NGS] ngCTF 24/7" (1.0); "[NGS] Classic CTF 0.75" (0.75)`, [The name on the server list.], [both], `SP_SERVER_NAME`),
   (`port`, `int`, `32887 (1.0); 32897 (0.75)`, [Port for the server to listen on], [both], "-"),
   (`max_players`, `int`, `128 (1.0); 32 (0.75)`, [Players at most. 1.0: up to 128 (the default); 0.75: up to 32, the wire's limit. A smaller number is kept, a larger one is cut to the profile's cap.], [both], "-"),
   (`master`, `bool`, `false`, [Kept so old configs load. A 1.0 server does not announce on the 0.75 master list: with #raw("true") it only logs a warning. The listing is #raw("[master] enabled") (1.0) or #raw("[master075]") (0.75 profile).], [both], "-"),
