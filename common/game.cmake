@@ -2,7 +2,7 @@
 # this file: the C code sees the strings as macros, CMake uses the variables
 # (package name, server binary). tools/ scripts and the Makefile parse this
 # file for the same values. Change it here and rebuild both.
-set(GAME_NAME "Nextgen Spades")
+set(GAME_NAME "Nexgen Spades")
 # the mark, for where the full name does not fit: an app icon's label (a
 # phone truncates it), the home screen of a narrow window, a splash. It
 # never replaces the name in a sentence or on a store page
