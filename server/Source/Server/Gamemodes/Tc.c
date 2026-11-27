@@ -6,6 +6,8 @@
 #include <Server/Gamemodes/Gamemode.h>
 #include <Server/Gamemodes/Squads.h>
 #include <Server/Gamemodes/Tc.h>
+#include <Server/Legacy/Wire075.h>
+#include <Server/Profile.h>
 #include <Server/MapMeta/MapMeta.h>
 #include <Server/Player.h>
 #include <Server/Proto10/Flags.h>
@@ -170,7 +172,7 @@ static void _tc_place(server_t* server)
 }
 
 /* what the clients get of each territory (see sent_*) */
-static void _tc_sync(uint64_t now)
+static void _tc_sync(server_t* server, uint64_t now)
 {
     for (int i = 0; i < tc.count; i++) {
         tc_territory_t* t    = &tc.t[i];
@@ -195,6 +197,11 @@ static void _tc_sync(uint64_t now)
             t->sent_share = (int) lroundf(share * 1000.0f);
             t->sent_per_s = per_s;
             t->sent_at    = now;
+            if (profile_is_075() && server != NULL) {
+                /* 0.75's ProgressBar: the client runs the capture on at
+                   players * 0.05 a second toward the capturing team */
+                legacy_tc_progress(server, i, cap, abs(rate), share);
+            }
         }
     }
 }
@@ -217,7 +224,7 @@ static void _tc_init(server_t* server)
     server->protocol.gamemode.intel_held[1] = 0;
     memset(&tc, 0, sizeof tc);
     _tc_place(server);
-    _tc_sync(get_nanos());
+    _tc_sync(server, get_nanos());
     /* the team scores count territories held, the limit is all of them */
     server->protocol.gamemode.score_limit = (uint8_t) tc.count;
     _tc_score(server);
@@ -273,6 +280,9 @@ static void _tc_capture(server_t* server, int i, int team)
         }
     }
     uint8_t* score = server->protocol.gamemode.score;
+    if (profile_is_075()) {
+        legacy_tc_capture(server, i, team, score[team] >= tc.count);
+    }
     evt_log(NULL, "tc", "action=capture index=%d team=%d was=%d players=%d held=%u-%u", i, team, was, helpers,
             score[0], score[1]);
     /* the territory changed hands: its fortification is the old owner's no
@@ -441,7 +451,7 @@ static void _tc_tick(server_t* server)
         evt_log(NULL, "tc", "action=status held=%u-%u%s", server->protocol.gamemode.score[0],
                 server->protocol.gamemode.score[1], line);
     }
-    _tc_sync(now);
+    _tc_sync(server, now);
     if (!tc.ended && now >= tc.deadline) {
         _tc_end(server, "time");
     }
@@ -774,3 +784,16 @@ const gamemode_ops_t tc_ops = {
     .player_command = _tc_command,
     .hit_damage     = classes_hit_damage,
 };
+
+int tc_count(void)
+{
+    return tc.count;
+}
+
+int tc_territory(int i, float* x, float* y, float* z)
+{
+    *x = (float) tc.t[i].x + 0.5f;
+    *y = (float) tc.t[i].y + 0.5f;
+    *z = (float) tc.t[i].z;
+    return tc.t[i].owner < 0 ? 2 : tc.t[i].owner;
+}

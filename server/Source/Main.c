@@ -224,7 +224,7 @@ static void warn_default_passwords(const char* const passwords[5])
    here we only let the name through so --gamemode can pick it. */
 static int profile_075_mode(const char* name)
 {
-    if (!strcmp(name, "ctf") || !strcmp(name, "babel")) {
+    if (!strcmp(name, "ctf") || !strcmp(name, "tc") || !strcmp(name, "babel")) {
         return 1;
     }
     return plugins_exists(name);
@@ -607,7 +607,7 @@ int main(int argc, char** argv)
             /* asked before gamemode_find, which knows the 1.0 modes too: a
                1.0 mode named to the 0.75 server is not "unknown" */
             if (profile_is_075() && !profile_075_mode(argv[i + 1])) {
-                LOG_ERROR("Game mode '%s' is not in the 0.75 profile (it has ctf and babel)", argv[i + 1]);
+                LOG_ERROR("Game mode '%s' is not in the 0.75 profile (it has ctf, tc and babel)", argv[i + 1]);
                 exit(EXIT_FAILURE);
             }
             const gamemode_ops_t* mode = gamemode_find(argv[i + 1]);
@@ -664,7 +664,7 @@ int main(int argc, char** argv)
         const gamemode_ops_t* configured = gamemode_ops_of(gamemode);
         if (configured == NULL || !profile_075_mode(configured->name)) {
             const gamemode_ops_t* ctf = gamemode_find("ctf");
-            LOG_WARNING("Game mode '%s' of %s is not in the 0.75 profile (it has ctf and babel): playing ctf",
+            LOG_WARNING("Game mode '%s' of %s is not in the 0.75 profile (it has ctf, tc and babel): playing ctf",
                         configured != NULL ? configured->name : "unknown", server_config_path());
             if (ctf != NULL) {
                 gamemode = (uint8_t) ctf->id;

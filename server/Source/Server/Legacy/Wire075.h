@@ -87,6 +87,9 @@ void legacy_send_notice(player_t* player, uint8_t type, const char* message);
 void legacy_broadcast_notice(server_t* server, uint8_t type, const char* message);
 /* the intel of team changed hands (CTF's events: pickup, capture, drop) */
 void legacy_intel_event(server_t* server, uint8_t team, int event);
+/* territory control's two packets (Gamemodes/Tc.c calls them in the 0.75 profile) */
+void legacy_tc_progress(server_t* server, int index, int capturing, int rate, float progress);
+void legacy_tc_capture(server_t* server, int index, int team, int winning);
 /* a GenericCommand the 1.0 bridge would have sent: its 0.75 packet where
    there is one (restock, fog), nothing else */
 void legacy_generic(server_t* server, player_t* to, int n, const char* const* parts);

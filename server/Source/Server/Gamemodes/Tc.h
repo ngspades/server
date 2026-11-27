@@ -7,4 +7,9 @@
 
 extern const gamemode_ops_t tc_ops;
 
+/* the territories as the 0.75 wire needs them: how many, and the cell and
+   holder (0, 1, or 2 for nobody) of one */
+int tc_count(void);
+int tc_territory(int i, float* x, float* y, float* z);
+
 #endif
