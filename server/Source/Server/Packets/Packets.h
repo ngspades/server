@@ -21,7 +21,8 @@ uint8_t allow_shot(server_t*  server,
                    vector3f_t shot_pos,
                    vector3f_t shot_orien,
                    vector3f_t hit_pos,
-                   vector3f_t shot_eye_pos); // Remove me from here later
+                   vector3f_t shot_eye_pos,
+                   uint8_t    last_round); // Remove me from here later
 
 /* The server speaks protocol 1.0 only, so none of these sends a 0.75 packet
    any more. They keep their historical names because they are the gameplay

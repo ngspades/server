@@ -16,7 +16,8 @@ inline uint8_t allow_shot(server_t*  server,
                           vector3f_t shot_pos,
                           vector3f_t shot_orien,
                           vector3f_t hit_pos,
-                          vector3f_t shot_eye_pos)
+                          vector3f_t shot_eye_pos,
+                          uint8_t    last_round)
 {
     uint8_t ret = 0;
 
@@ -25,7 +26,9 @@ inline uint8_t allow_shot(server_t*  server,
         return ret;
     }
 
-    if (player->primary_fire && player->reloading == 0 &&
+    /* the round that emptied the clip let go of the trigger (WeaponInput.c,
+       Player.c) before its hit came in: that hit still counts */
+    if ((player->primary_fire || last_round) && player->reloading == 0 &&
         ((player->item == TOOL_SPADE && diff_is_older_then(time_now, &player->timers.since_last_shot, NANO_IN_MILLI * 100)) ||
          (player->item == TOOL_GUN && player->weapon_pellets != 0 && player_gun_raised(player, time_now))) &&
         player->alive && player_hit->alive && (player->team != player_hit->team || player->allow_team_killing) &&
