@@ -28,12 +28,13 @@ static const char* _hit_refusal(server_t*  server,
                                 player_t*  hit_player,
                                 vector3f_t shot_pos,
                                 vector3f_t shot_orien,
-                                vector3f_t aim_pos)
+                                vector3f_t aim_pos,
+                                uint8_t    last_round)
 {
     if (player->next_shot_invalid) {
         return "shot_invalidated";
     }
-    if (!player->primary_fire) {
+    if (!player->primary_fire && !last_round) {
         return "not_firing";
     }
     if (player->reloading) {
@@ -109,6 +110,11 @@ void game_player_hit(server_t* server, player_t* player, uint8_t hit_player_id, 
                 player->sprinting ? "sprinting" : "empty_clip");
         return;
     }
+    /* the clip is empty but its last round is still in the gun's interval:
+       that press set primary_fire back to 0 when it emptied the clip, so
+       the trigger reads as up. The Marksman's sniper holds one round, so
+       every one of its shots is a last round: all were refused (not_firing) */
+    uint8_t last_round = player->item == TOOL_GUN && player->weapon_clip == 0;
 
     if (hit_type != HIT_TYPE_MELEE && (gamemode_player_rules(server, player) & GM_RULE_NO_GUN)) {
         evt_log(player, "hit_refused", "target=%s why=mode", hit_player->name);
@@ -120,9 +126,10 @@ void game_player_hit(server_t* server, player_t* player, uint8_t hit_player_id, 
     uint64_t timeNow = get_nanos();
 
     if (!allow_shot(
-        server, player, hit_player, timeNow, distance, &x, &y, &z, shot_pos, shot_orien, aim_pos, shot_eye_pos))
+        server, player, hit_player, timeNow, distance, &x, &y, &z, shot_pos, shot_orien, aim_pos, shot_eye_pos,
+        last_round))
     {
-        const char* why = _hit_refusal(server, player, hit_player, shot_pos, shot_orien, aim_pos);
+        const char* why = _hit_refusal(server, player, hit_player, shot_pos, shot_orien, aim_pos, last_round);
         evt_log(player, "hit_refused", "target=%s why=%s", hit_player->name, why);
         if (!strcmp(why, "not_aimed_at_target") || !strcmp(why, "shot_invalidated")) {
             anticheat_report(server, player, ANTICHEAT_HIT, 1, why);
